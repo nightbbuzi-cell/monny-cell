@@ -348,7 +348,7 @@ with tab3:
             "誰付錢_代墊": st.column_config.SelectboxColumn(options=GROUP_MEMBERS),
             "誰消費_應付": st.column_config.SelectboxColumn(options=GROUP_MEMBERS + ["所有人"]),
             "分帳模式": st.column_config.SelectboxColumn(options=["個人花費", "幫人代墊", "大家均分", "轉帳/還款"]),
-            "記錄者": st.column_config.TextColumn(":material/edit_document: 記錄者", disabled=True)
+            "記錄者": st.column_config.TextColumn("記錄者", disabled=True)
         },
         key="history_editor"
     )
