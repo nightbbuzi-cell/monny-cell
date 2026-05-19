@@ -82,8 +82,8 @@ def process_receipt(image):
     return items, total
 
 # --- UI 介面 ---
-st.title("💰 智慧記帳：專業防重複系統 (✨ 雲端更新版)")
-st.markdown("##### 🧾 輕鬆管理群組帳務，支援收據自動辨識、手動記帳與自動分帳計算！")
+st.title(":material/account_balance_wallet: 智慧記帳：專業防重複系統 (:material/stars: 雲端更新版)")
+st.markdown("##### :material/receipt_long: 輕鬆管理群組帳務，支援收據自動辨識、手動記帳與自動分帳計算！")
 st.divider()
 
 if 'group_members' not in st.session_state:
@@ -94,9 +94,9 @@ if 'pending_items' not in st.session_state:
     st.session_state['pending_items'] = []
 
 with st.sidebar:
-    st.header(f"👥 群組與個人設定 (共 {len(GROUP_MEMBERS)} 人)")
+    st.header(f":material/group: 群組與個人設定 (共 {len(GROUP_MEMBERS)} 人)")
     
-    with st.expander("➕ 邀請/新增成員", expanded=False):
+    with st.expander(":material/person_add: 邀請/新增成員", expanded=False):
         new_member = st.text_input("輸入新成員名稱")
         if st.button("加入群組") and new_member:
             if new_member not in GROUP_MEMBERS:
@@ -108,7 +108,7 @@ with st.sidebar:
             else:
                 st.warning("此成員已在群組中喔！")
                 
-    with st.expander("➖ 移除成員", expanded=False):
+    with st.expander(":material/person_remove: 移除成員", expanded=False):
         member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
         if st.button("確認移除", type="primary"):
             if len(GROUP_MEMBERS) > 1:
@@ -119,17 +119,17 @@ with st.sidebar:
             else:
                 st.warning("群組至少要保留一名成員喔！")
 
-    current_user = st.selectbox("👤 您是哪位？ (當前操作者)", GROUP_MEMBERS)
-    st.info(f"👋 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
+    current_user = st.selectbox(":material/person: 您是哪位？ (當前操作者)", GROUP_MEMBERS)
+    st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
     
     st.divider()
-    st.header("📸 掃描收據")
+    st.header(":material/document_scanner: 掃描收據")
     uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"])
     
     if uploaded_file:
         st.image(uploaded_file, caption="收據預覽", use_container_width=True)
         
-    if uploaded_file and st.button("🚀 執行辨識"):
+    if uploaded_file and st.button(":material/rocket_launch: 執行辨識"):
         if HAS_EASYOCR:
             with st.spinner("辨識中..."):
                 items, total = process_receipt(Image.open(uploaded_file))
@@ -141,20 +141,20 @@ with st.sidebar:
     st.divider()
     if os.path.exists(DATA_FILE):
         file_size_kb = os.path.getsize(DATA_FILE) / 1024
-        st.caption(f"💾 目前資料庫檔案大小: {file_size_kb:.2f} KB")
+        st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB")
         record_count = len(load_all_data())
-        st.caption(f"📑 總記帳筆數: {record_count} 筆")
+        st.caption(f":material/receipt: 總記帳筆數: {record_count} 筆")
         
-    if st.button("🗑️ 清空所有歷史紀錄", type="primary"):
+    if st.button(":material/delete: 清空所有歷史紀錄", type="primary"):
         save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
         st.rerun()
 
 col1, col2 = st.columns([1, 1.2])
 
 with col1:
-    st.subheader("📝 帳務輸入 (緩衝區)")
+    st.subheader(":material/edit_document: 帳務輸入 (緩衝區)")
     
-    with st.expander("➕ 手動新增品項", expanded=False):
+    with st.expander(":material/add: 手動新增品項", expanded=False):
         with st.form("manual_add", clear_on_submit=True):
             mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
             if st.form_submit_button("加入清單") and mn:
@@ -164,14 +164,14 @@ with col1:
     show_buffer = len(st.session_state['pending_items']) > 0 or ('detected_total' in st.session_state)
 
     if show_buffer:
-        st.write("#### ⏳ 待確認明細")
+        st.write("#### :material/hourglass_empty: 待確認明細")
         
         if 'detected_total' in st.session_state and st.session_state['detected_total'] > 0:
-            st.info(f"🧾 系統辨識收據總金額為：**${st.session_state['detected_total']}** (僅供參考)")
+            st.info(f":material/receipt_long: 系統辨識收據總金額為：**${st.session_state['detected_total']}** (僅供參考)")
         
         # --- 新增：確認與調整總品項數量 ---
         current_count = len(st.session_state['pending_items'])
-        new_count = st.number_input("🔢 確認/調整總品項數量", min_value=0, value=current_count, step=1, help="若辨識數量有誤，可直接修改此數字，系統會自動為您增減輸入欄位。")
+        new_count = st.number_input(":material/format_list_numbered: 確認/調整總品項數量", min_value=0, value=current_count, step=1, help="若辨識數量有誤，可直接修改此數字，系統會自動為您增減輸入欄位。")
         
         if new_count != current_count:
             if new_count > current_count:
@@ -196,7 +196,7 @@ with col1:
                 
                 # 在新欄位中加入刪除按鈕，並透過 st.write 調整垂直位置
                 c_del.write(" ") # 佔位符，讓按鈕稍微往下對齊
-                if c_del.button("🗑️", key=f"del_{idx}", help="刪除此項目"):
+                if c_del.button(":material/delete:", key=f"del_{idx}", help="刪除此項目"):
                     st.session_state['pending_items'].pop(idx)
                     st.rerun()
 
@@ -213,7 +213,7 @@ with col1:
 
         st.divider()
         c_btn1, c_btn2 = st.columns(2)
-        if c_btn1.button("✅ 批次儲存至帳本", type="primary", use_container_width=True):
+        if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", use_container_width=True):
             df_tmp = load_all_data()
             df_tmp = pd.concat([df_tmp, pd.DataFrame(confirmed_batch)], ignore_index=True)
             save_full_df(df_tmp)
@@ -223,7 +223,7 @@ with col1:
             st.success("全部項目已入帳！")
             st.rerun()
             
-        if c_btn2.button("❌ 全部捨棄", use_container_width=True):
+        if c_btn2.button(":material/cancel: 全部捨棄", use_container_width=True):
             st.session_state['pending_items'] = []
             if 'detected_total' in st.session_state:
                 del st.session_state['detected_total']
@@ -232,11 +232,11 @@ with col1:
         st.info("目前沒有待處理項目。")
 
 with col2:
-    st.subheader("📊 帳本清算中心")
+    st.subheader(":material/bar_chart: 帳本清算中心")
     placeholder = st.container()
     data = load_all_data()
     
-    st.write("#### 📜 歷史明細編輯器")
+    st.write("#### :material/history: 歷史明細編輯器")
     edited_df = st.data_editor(
         data, num_rows="dynamic", use_container_width=True,
         column_config={
@@ -244,13 +244,13 @@ with col2:
             "誰付錢_代墊": st.column_config.SelectboxColumn(options=GROUP_MEMBERS),
             "誰消費_應付": st.column_config.SelectboxColumn(options=GROUP_MEMBERS + ["所有人"]),
             "分帳模式": st.column_config.SelectboxColumn(options=["全算我的", "指定某人", "大家均分"]),
-            "記錄者": st.column_config.TextColumn("📝 記錄者", disabled=True)
+            "記錄者": st.column_config.TextColumn(":material/edit_document: 記錄者", disabled=True)
         },
         key="history_editor"
     )
 
     with placeholder:
-        st.write("#### 💰 誰欠誰錢 (結算表)")
+        st.write("#### :material/payments: 誰欠誰錢 (結算表)")
         if not edited_df.empty:
             summary = []
             num_m = len(GROUP_MEMBERS)
@@ -263,5 +263,5 @@ with col2:
                 lambda v: 'color: red;' if v < 0 else 'color: green;', subset=['餘額']
             ))
 
-    if st.button("💾 保存編輯器變更"):
+    if st.button(":material/save: 保存編輯器變更"):
         save_full_df(edited_df); st.success("已更新資料庫！"); st.rerun()
