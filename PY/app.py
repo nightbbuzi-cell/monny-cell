@@ -18,12 +18,18 @@ st.set_page_config(page_title="智慧記帳 - 專業防重複版", layout="wide"
 # --- 🎨 自訂質感米色主題 (直接寫入程式，保證絕對生效) ---
 st.markdown("""
 <style>
-    /* 主畫面背景色 (奶油米) */
-    .stApp { background-color: #FCFBF8; }
-    /* 側邊欄背景色 (燕麥色) */
-    [data-testid="stSidebar"] { background-color: #F4F0E6; }
-    /* 將部分區塊背景改為純白，增加立體質感 */
-    div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    /* 1. 主畫面背景色 (更明顯的溫暖米白) */
+    .stApp { background-color: #FDF6EB !important; }
+    /* 2. 側邊欄背景色 (燕麥拿鐵色) */
+    [data-testid="stSidebar"] { background-color: #EFE8DD !important; }
+    /* 3. 全域字體顏色改為深可可棕色 */
+    h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"] { 
+        color: #4A3C31 !important; 
+    }
+    /* 4. 保護主要按鈕(紅色/強調按鈕)的字體維持白色，以免看不見 */
+    button[kind="primary"] p, button[kind="primary"] span { color: #FFFFFF !important; }
+    /* 5. 將部分區塊背景改為純白，增加立體質感 */
+    div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
 </style>
 """, unsafe_allow_html=True)
 
