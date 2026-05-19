@@ -22,14 +22,16 @@ st.markdown("""
     .stApp { background-color: #FDF6EB !important; }
     /* 2. 側邊欄背景色 (燕麥拿鐵色) */
     [data-testid="stSidebar"] { background-color: #EFE8DD !important; }
-    /* 3. 全域字體顏色改為深可可棕色 */
-    h1, h2, h3, h4, h5, h6, p, span, label, div[data-testid="stMarkdownContainer"] { 
+    /* 3. 標題與一般文字顏色改為深可可棕色 (移除全局 span，讓選單與按鈕在 Dark 模式下能自動反白) */
+    h1, h2, h3, h4, h5, h6, label, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] span { 
         color: #4A3C31 !important; 
     }
     /* 4. 保護主要按鈕(紅色/強調按鈕)的字體維持白色，以免看不見 */
     button[kind="primary"] p, button[kind="primary"] span { color: #FFFFFF !important; }
     /* 5. 將部分區塊背景改為純白，增加立體質感 */
     div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    /* 6. 確保純白區塊內的標題文字也是深色 (修復 Expander 標題在 Dark 模式反白的問題) */
+    summary, summary span, summary p { color: #4A3C31 !important; }
 </style>
 """, unsafe_allow_html=True)
 
