@@ -139,6 +139,8 @@ with st.sidebar:
     if os.path.exists(DATA_FILE):
         file_size_kb = os.path.getsize(DATA_FILE) / 1024
         st.caption(f"💾 目前資料庫檔案大小: {file_size_kb:.2f} KB")
+        record_count = len(load_all_data())
+        st.caption(f"📑 總記帳筆數: {record_count} 筆")
         
     if st.button("🗑️ 清空所有歷史紀錄", type="primary"):
         save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
