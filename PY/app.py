@@ -23,6 +23,15 @@ st.markdown("""
     div[data-testid="stExpander"], div[data-testid="stForm"] { 
         border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); 
     }
+    
+    /* --- 📱 跨裝置閱讀舒適度優化 (流體字體與排版) --- */
+    p, span, label, div[data-testid="stMarkdownContainer"] { line-height: 1.6 !important; }
+    h1 { font-size: clamp(1.5rem, 4vw, 2.2rem) !important; }
+    h3 { font-size: clamp(1.2rem, 3vw, 1.5rem) !important; }
+    h4 { font-size: clamp(1.1rem, 2.5vw, 1.2rem) !important; }
+    [data-testid="stMetricValue"] { font-size: clamp(1.5rem, 4vw, 2rem) !important; }
+    /* 關鍵修復：防止 iPhone(iOS) 在點擊輸入框時強制放大畫面 */
+    input, select, textarea, [data-baseweb="select"] { font-size: 16px !important; }
 </style>
 """, unsafe_allow_html=True)
 
