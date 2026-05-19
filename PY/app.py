@@ -115,7 +115,13 @@ def load_all_data():
     df = pd.read_csv(DATA_FILE)
     if "記錄者" not in df.columns:
         df["記錄者"] = "未知" # 保護舊資料不會報錯
-    df["記錄者"] = df["記錄者"].fillna(current_user if 'current_user' in locals() else "未知") # 確保沒有空值
+    
+    # --- 🛡️ 全域資料防呆與清洗 (修復型別崩潰) ---
+    df["記錄者"] = df["記錄者"].fillna("未知").astype(str)
+    df['金額'] = pd.to_numeric(df['金額'], errors='coerce').fillna(0.0)
+    df['誰付錢_代墊'] = df['誰付錢_代墊'].astype(str).str.strip()
+    df['誰消費_應付'] = df['誰消費_應付'].astype(str).str.strip()
+    df['分帳模式'] = df['分帳模式'].astype(str).str.strip()
         
     # 自動轉換舊版的分帳模式名稱為新版
     df["分帳模式"] = df["分帳模式"].replace({
@@ -208,8 +214,12 @@ with tab1:
             st.write("#### :material/edit_square: 手動輸入")
             with st.form("manual_add", clear_on_submit=True):
                 mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
-                if st.form_submit_button("加入清單", use_container_width=True) and mn:
-                    st.session_state['pending_items'].append({"name": mn, "price": mp}); st.rerun()
+                submitted = st.form_submit_button("加入清單", use_container_width=True)
+                
+            # 將 st.rerun 移出 form 範圍，徹底解決崩潰問題
+            if submitted and mn:
+                st.session_state['pending_items'].append({"name": mn, "price": mp})
+                st.rerun()
                     
     with input_c2:
         with st.container(border=True):
