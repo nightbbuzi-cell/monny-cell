@@ -18,24 +18,9 @@ st.set_page_config(page_title="智慧記帳 - 專業防重複版", layout="wide"
 # --- 🎨 自訂質感主題 (支援淺色/深色模式自動切換) ---
 st.markdown("""
 <style>
-    /* ================= ☀️ 淺色模式 (米白質感) ================= */
-    @media (prefers-color-scheme: light) {
-        .stApp { background-color: #FDF6EB !important; }
-        [data-testid="stSidebar"] { background-color: #EFE8DD !important; }
-        h1, h2, h3, h4, h5, h6, label, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] span { 
-            color: #4A3C31 !important; 
-        }
-        button[kind="primary"] p, button[kind="primary"] span { color: #FFFFFF !important; }
-        div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        summary, summary span, summary p { color: #4A3C31 !important; }
-    }
-
-    /* ================= 🌙 深色模式 (質感黑) ================= */
-    @media (prefers-color-scheme: dark) {
-        /* 確保文字反白，並將立體區塊改為深灰色 */
-        h1, h2, h3, h4, h5, h6, label, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] span { color: #FAFAFA !important; }
-        div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #262730 !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.5); border: 1px solid #444; }
-        summary, summary span, summary p { color: #FAFAFA !important; }
+    /* 僅保留立體區塊的陰影與圓角設計，讓顏色完美跟隨 Streamlit 系統自動切換 */
+    div[data-testid="stExpander"], div[data-testid="stForm"] { 
+        border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.1); 
     }
 </style>
 """, unsafe_allow_html=True)
