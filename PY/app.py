@@ -302,7 +302,15 @@ with tab2:
     if data.empty:
         st.info("目前還沒有任何記帳紀錄喔！請先到「記帳輸入」新增帳目。")
     else:
-        st.write("#### :material/account_balance: 成員財務概況")
+        # --- 資料清洗防呆 (極度重要) ---
+        # 避免使用者手動編輯時輸入文字或空格，導致 Pandas 把金額當字串相加 (例如 "100"+"200"="100200")
+        data['金額'] = pd.to_numeric(data['金額'], errors='coerce').fillna(0)
+        # 清除名字前後的不小心輸入的空白，確保每筆都能精準對應到人
+        data['誰付錢_代墊'] = data['誰付錢_代墊'].astype(str).str.strip()
+        data['誰消費_應付'] = data['誰消費_應付'].astype(str).str.strip()
+        data['分帳模式'] = data['分帳模式'].astype(str).str.strip()
+
+        st.write("#### :material/account_balance: 財務結算概況")
         summary = []
         num_m = len(GROUP_MEMBERS)
         
@@ -310,14 +318,29 @@ with tab2:
         m_cols = st.columns(len(GROUP_MEMBERS) if len(GROUP_MEMBERS) > 0 else 1)
         
         for i, m in enumerate(GROUP_MEMBERS):
-            paid = data[data['誰付錢_代墊'] == m]['金額'].sum()
-            direct = data[(data['誰消費_應付'] == m) & (data['分帳模式'] != "轉帳/還款")]['金額'].sum()
-            split = data[data['誰消費_應付'] == '所有人']['金額'].sum() / num_m if num_m > 0 else 0
-            personal_total = direct + split
-            received = data[(data['誰消費_應付'] == m) & (data['分帳模式'] == "轉帳/還款")]['金額'].sum()
-            balance = paid - (personal_total + received)
+            # 1. 為群組代墊的錢 (必須排除轉帳/還款，否則會虛增代墊金額)
+            group_paid = data[(data['誰付錢_代墊'] == m) & (data['分帳模式'] != "轉帳/還款")]['金額'].sum()
             
-            summary.append({"成員": m, "個人總消費": personal_total, "總付/代墊": paid, "結算餘額": balance})
+            # 2. 個人實際消費
+            direct = data[(data['誰消費_應付'] == m) & (data['分帳模式'] != "轉帳/還款")]['金額'].sum()
+            split = data[(data['誰消費_應付'] == '所有人') & (data['分帳模式'] != "轉帳/還款")]['金額'].sum() / num_m if num_m > 0 else 0
+            personal_total = direct + split
+            
+            # 3. 轉帳與還款 (我給別人 vs 別人給我)
+            transfer_out = data[(data['誰付錢_代墊'] == m) & (data['分帳模式'] == "轉帳/還款")]['金額'].sum()
+            transfer_in = data[(data['誰消費_應付'] == m) & (data['分帳模式'] == "轉帳/還款")]['金額'].sum()
+            
+            # 4. 結算餘額 = (代墊 - 消費) + (轉出 - 轉入)
+            balance = (group_paid - personal_total) + transfer_out - transfer_in
+            
+            summary.append({
+                "成員": m, 
+                "個人總消費": personal_total, 
+                "為群組代墊": group_paid, 
+                "已還款(轉出)": transfer_out,
+                "已收回(轉入)": transfer_in,
+                "結算餘額": balance
+            })
             
             # 顯示個人總消費卡片與結算狀態
             with m_cols[i]:
