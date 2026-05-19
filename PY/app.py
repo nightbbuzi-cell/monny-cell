@@ -302,14 +302,6 @@ with tab2:
     if data.empty:
         st.info("目前還沒有任何記帳紀錄喔！請先到「記帳輸入」新增帳目。")
     else:
-        # --- 資料清洗防呆 (極度重要) ---
-        # 避免使用者手動編輯時輸入文字或空格，導致 Pandas 把金額當字串相加 (例如 "100"+"200"="100200")
-        data['金額'] = pd.to_numeric(data['金額'], errors='coerce').fillna(0)
-        # 清除名字前後的不小心輸入的空白，確保每筆都能精準對應到人
-        data['誰付錢_代墊'] = data['誰付錢_代墊'].astype(str).str.strip()
-        data['誰消費_應付'] = data['誰消費_應付'].astype(str).str.strip()
-        data['分帳模式'] = data['分帳模式'].astype(str).str.strip()
-
         st.write("#### :material/account_balance: 財務結算概況")
         summary = []
         num_m = len(GROUP_MEMBERS)
