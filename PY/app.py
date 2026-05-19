@@ -14,6 +14,19 @@ import os
 
 # --- 基礎設定 ---
 st.set_page_config(page_title="智慧記帳 - 專業防重複版", layout="wide")
+
+# --- 🎨 自訂質感米色主題 (直接寫入程式，保證絕對生效) ---
+st.markdown("""
+<style>
+    /* 主畫面背景色 (奶油米) */
+    .stApp { background-color: #FCFBF8; }
+    /* 側邊欄背景色 (燕麥色) */
+    [data-testid="stSidebar"] { background-color: #F4F0E6; }
+    /* 將部分區塊背景改為純白，增加立體質感 */
+    div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+</style>
+""", unsafe_allow_html=True)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "group_expense_data.csv")
 MEMBERS_FILE = os.path.join(BASE_DIR, "group_members.txt")
