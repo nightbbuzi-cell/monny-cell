@@ -111,17 +111,24 @@ def load_all_data():
     if not os.path.exists(DATA_FILE):
         df = pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"])
         df.to_csv(DATA_FILE, index=False)
-        return df
-    df = pd.read_csv(DATA_FILE)
-    if "記錄者" not in df.columns:
-        df["記錄者"] = "未知" # 保護舊資料不會報錯
+    else:
+        df = pd.read_csv(DATA_FILE)
+        
+    # 確保所有必要欄位存在 (防止舊版資料庫欄位缺失)
+    for col in ["日期", "品項", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]:
+        if col not in df.columns:
+            df[col] = "未知"
+    if "金額" not in df.columns:
+        df["金額"] = 0.0
     
-    # --- 🛡️ 全域資料防呆與清洗 (修復型別崩潰) ---
+    # --- 🛡️ 終極全域資料防呆與清洗 (徹底修復各種崩潰) ---
+    df["日期"] = df["日期"].fillna(datetime.now().strftime("%Y-%m-%d")).astype(str)
+    df["品項"] = df["品項"].fillna("").astype(str)
     df["記錄者"] = df["記錄者"].fillna("未知").astype(str)
     df['金額'] = pd.to_numeric(df['金額'], errors='coerce').fillna(0.0)
-    df['誰付錢_代墊'] = df['誰付錢_代墊'].astype(str).str.strip()
-    df['誰消費_應付'] = df['誰消費_應付'].astype(str).str.strip()
-    df['分帳模式'] = df['分帳模式'].astype(str).str.strip()
+    df['誰付錢_代墊'] = df['誰付錢_代墊'].fillna("未知").astype(str).str.strip()
+    df['誰消費_應付'] = df['誰消費_應付'].fillna("未知").astype(str).str.strip()
+    df['分帳模式'] = df['分帳模式'].fillna("個人花費").astype(str).str.strip()
         
     # 自動轉換舊版的分帳模式名稱為新版
     df["分帳模式"] = df["分帳模式"].replace({
@@ -218,7 +225,7 @@ with tab1:
                 
             # 將 st.rerun 移出 form 範圍，徹底解決崩潰問題
             if submitted and mn:
-                st.session_state['pending_items'].append({"name": mn, "price": mp})
+                st.session_state['pending_items'].append({"name": mn, "price": float(mp)})
                 st.rerun()
                     
     with input_c2:
@@ -292,9 +299,10 @@ with tab1:
         st.divider()
         c_btn1, c_btn2 = st.columns(2)
         if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", use_container_width=True):
-            df_tmp = load_all_data()
-            df_tmp = pd.concat([df_tmp, pd.DataFrame(confirmed_batch)], ignore_index=True)
-            save_full_df(df_tmp)
+            if confirmed_batch: # 防呆：確保清單有東西才存，避免空陣列合併崩潰
+                df_tmp = load_all_data()
+                df_tmp = pd.concat([df_tmp, pd.DataFrame(confirmed_batch)], ignore_index=True)
+                save_full_df(df_tmp)
             st.session_state['pending_items'] = []
             if 'detected_total' in st.session_state:
                 del st.session_state['detected_total']
