@@ -91,7 +91,7 @@ if 'pending_items' not in st.session_state:
     st.session_state['pending_items'] = []
 
 with st.sidebar:
-    st.header(" 群組與個人設定")
+    st.header(f"👥 群組與個人設定 (共 {len(GROUP_MEMBERS)} 人)")
     
     with st.expander("➕ 邀請/新增成員", expanded=False):
         new_member = st.text_input("輸入新成員名稱")
@@ -104,6 +104,17 @@ with st.sidebar:
                 st.rerun()
             else:
                 st.warning("此成員已在群組中喔！")
+                
+    with st.expander("➖ 移除成員", expanded=False):
+        member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
+        if st.button("確認移除", type="primary"):
+            if len(GROUP_MEMBERS) > 1:
+                GROUP_MEMBERS.remove(member_to_remove)
+                save_members(GROUP_MEMBERS)
+                st.session_state['group_members'] = GROUP_MEMBERS
+                st.rerun()
+            else:
+                st.warning("群組至少要保留一名成員喔！")
 
     current_user = st.selectbox("👤 您是哪位？ (當前操作者)", GROUP_MEMBERS)
     st.info(f"👋 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
