@@ -15,23 +15,28 @@ import os
 # --- 基礎設定 ---
 st.set_page_config(page_title="智慧記帳 - 專業防重複版", layout="wide")
 
-# --- 🎨 自訂質感米色主題 (直接寫入程式，保證絕對生效) ---
+# --- 🎨 自訂質感主題 (支援淺色/深色模式自動切換) ---
 st.markdown("""
 <style>
-    /* 1. 主畫面背景色 (更明顯的溫暖米白) */
-    .stApp { background-color: #FDF6EB !important; }
-    /* 2. 側邊欄背景色 (燕麥拿鐵色) */
-    [data-testid="stSidebar"] { background-color: #EFE8DD !important; }
-    /* 3. 標題與一般文字顏色改為深可可棕色 (移除全局 span，讓選單與按鈕在 Dark 模式下能自動反白) */
-    h1, h2, h3, h4, h5, h6, label, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] span { 
-        color: #4A3C31 !important; 
+    /* ================= ☀️ 淺色模式 (米白質感) ================= */
+    @media (prefers-color-scheme: light) {
+        .stApp { background-color: #FDF6EB !important; }
+        [data-testid="stSidebar"] { background-color: #EFE8DD !important; }
+        h1, h2, h3, h4, h5, h6, label, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] span { 
+            color: #4A3C31 !important; 
+        }
+        button[kind="primary"] p, button[kind="primary"] span { color: #FFFFFF !important; }
+        div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        summary, summary span, summary p { color: #4A3C31 !important; }
     }
-    /* 4. 保護主要按鈕(紅色/強調按鈕)的字體維持白色，以免看不見 */
-    button[kind="primary"] p, button[kind="primary"] span { color: #FFFFFF !important; }
-    /* 5. 將部分區塊背景改為純白，增加立體質感 */
-    div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #FFFFFF !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-    /* 6. 確保純白區塊內的標題文字也是深色 (修復 Expander 標題在 Dark 模式反白的問題) */
-    summary, summary span, summary p { color: #4A3C31 !important; }
+
+    /* ================= 🌙 深色模式 (質感黑) ================= */
+    @media (prefers-color-scheme: dark) {
+        /* 確保文字反白，並將立體區塊改為深灰色 */
+        h1, h2, h3, h4, h5, h6, label, div[data-testid="stMarkdownContainer"] p, div[data-testid="stMarkdownContainer"] span { color: #FAFAFA !important; }
+        div[data-testid="stExpander"], div[data-testid="stForm"] { background-color: #262730 !important; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.5); border: 1px solid #444; }
+        summary, summary span, summary p { color: #FAFAFA !important; }
+    }
 </style>
 """, unsafe_allow_html=True)
 
