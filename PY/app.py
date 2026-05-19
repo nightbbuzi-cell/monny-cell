@@ -110,6 +110,27 @@ GROUP_MEMBERS = st.session_state['group_members']
 if 'pending_items' not in st.session_state:
     st.session_state['pending_items'] = []
 
+# --- 初始導引 (Onboarding) ---
+if not GROUP_MEMBERS:
+    st.info("👋 **歡迎來到智慧記帳系統！**")
+    st.write("#### 🚀 第一步：請先建立您的記帳成員名單")
+    st.caption("請輸入您或夥伴的名稱，加入第一位成員後即可解鎖完整的記帳功能！")
+    
+    with st.container(border=True):
+        col_m, col_btn = st.columns([3, 1])
+        with col_m:
+            first_member = st.text_input("輸入新成員名稱", placeholder="例如：自己、小明...", label_visibility="collapsed")
+        with col_btn:
+            if st.button(":material/person_add: 建立成員", type="primary", use_container_width=True):
+                if first_member and first_member not in GROUP_MEMBERS:
+                    GROUP_MEMBERS.append(first_member)
+                    save_members(GROUP_MEMBERS)
+                    st.session_state['group_members'] = GROUP_MEMBERS
+                    st.rerun()
+                elif first_member in GROUP_MEMBERS:
+                    st.warning("此成員已存在喔！")
+    st.stop() # 停止渲染後續的側邊欄與記帳介面
+
 with st.sidebar:
     st.header(f":material/group: 群組與個人設定 (共 {len(GROUP_MEMBERS)} 人)")
     
@@ -135,10 +156,6 @@ with st.sidebar:
                 st.rerun()
         else:
             st.info("目前沒有成員可移除。")
-
-    if not GROUP_MEMBERS:
-        st.warning("👉 請先從上方新增至少一名成員，才能開始使用系統喔！")
-        st.stop()
 
     current_user = st.selectbox(":material/person: 您是哪位？ (當前操作者)", GROUP_MEMBERS)
     st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
