@@ -89,8 +89,13 @@ DEFAULT_MEMBERS = []
 
 def load_members():
     if os.path.exists(MEMBERS_FILE):
-        with open(MEMBERS_FILE, "r", encoding="utf-8") as f:
-            return [line.strip() for line in f.readlines() if line.strip()]
+        try:
+            with open(MEMBERS_FILE, "r", encoding="utf-8") as f:
+                # 過濾掉 Git 衝突標記，防止陣列錯誤
+                members = [line.strip() for line in f.readlines() if line.strip() and not line.startswith(("<", "=", ">"))]
+                if members: return members
+        except Exception:
+            pass
     return DEFAULT_MEMBERS.copy()
 
 def save_members(members):
@@ -142,6 +147,7 @@ def save_full_df(df):
 
 # --- 核心辨識邏輯 ---
 def process_receipt(image):
+    reader = load_ocr_reader() # 改成延遲載入：需要辨識時才把肥大的模型塞進記憶體
     if reader is None:
         return [], 0.0
         
