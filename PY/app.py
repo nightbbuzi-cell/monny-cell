@@ -4,11 +4,6 @@ from datetime import datetime
 from PIL import Image
 import streamlit.components.v1 as components
 
-try:
-    import easyocr
-    HAS_EASYOCR = True
-except ImportError:
-    HAS_EASYOCR = False
 import numpy as np
 import re
 import os
@@ -38,46 +33,50 @@ st.markdown("""
 # --- 📱 注入手機版滑動切換分頁 (Swipe to switch tabs) 的 JavaScript ---
 components.html("""
 <script>
-const parentWindow = window.parent;
-const doc = parentWindow.document;
+try {
+    const parentWindow = window.parent;
+    const doc = parentWindow.document;
 
-// 防止重新載入時重複綁定監聽器
-if (!parentWindow.swipeBound) {
-    let touchstartX = 0;
-    let touchstartY = 0;
+    // 防止重新載入時重複綁定監聽器
+    if (!parentWindow.swipeBound) {
+        let touchstartX = 0;
+        let touchstartY = 0;
 
-    doc.addEventListener('touchstart', e => {
-        touchstartX = e.changedTouches[0].screenX;
-        touchstartY = e.changedTouches[0].screenY;
-    }, {passive: true});
+        doc.addEventListener('touchstart', e => {
+            touchstartX = e.changedTouches[0].screenX;
+            touchstartY = e.changedTouches[0].screenY;
+        }, {passive: true});
 
-    doc.addEventListener('touchend', e => {
-        let touchendX = e.changedTouches[0].screenX;
-        let touchendY = e.changedTouches[0].screenY;
-        
-        // 如果滑動位置在資料表(DataFrame)內，保留原生水平滾動，不切換分頁
-        if (e.target.closest('[data-testid="stDataFrame"]')) return;
+        doc.addEventListener('touchend', e => {
+            let touchendX = e.changedTouches[0].screenX;
+            let touchendY = e.changedTouches[0].screenY;
+            
+            // 如果滑動位置在資料表(DataFrame)內，保留原生水平滾動，不切換分頁
+            if (e.target.closest('[data-testid="stDataFrame"]')) return;
 
-        const xDiff = touchendX - touchstartX;
-        const yDiff = touchendY - touchstartY;
+            const xDiff = touchendX - touchstartX;
+            const yDiff = touchendY - touchstartY;
 
-        // 判斷是否為水平滑動 (X軸位移大於Y軸，且滑動距離超過 50px)
-        if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
-            const tabs = Array.from(doc.querySelectorAll('button[role="tab"]'));
-            if (!tabs || tabs.length === 0) return;
+            // 判斷是否為水平滑動 (X軸位移大於Y軸，且滑動距離超過 50px)
+            if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
+                const tabs = Array.from(doc.querySelectorAll('button[role="tab"]'));
+                if (!tabs || tabs.length === 0) return;
 
-            const activeTabIndex = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
-            if (activeTabIndex === -1) return;
+                const activeTabIndex = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
+                if (activeTabIndex === -1) return;
 
-            if (xDiff < 0) { // 向左滑 -> 下一頁
-                if (activeTabIndex < tabs.length - 1) tabs[activeTabIndex + 1].click();
-            } else { // 向右滑 -> 上一頁
-                if (activeTabIndex > 0) tabs[activeTabIndex - 1].click();
+                if (xDiff < 0) { // 向左滑 -> 下一頁
+                    if (activeTabIndex < tabs.length - 1) tabs[activeTabIndex + 1].click();
+                } else { // 向右滑 -> 上一頁
+                    if (activeTabIndex > 0) tabs[activeTabIndex - 1].click();
+                }
             }
-        }
-    }, {passive: true});
-    
-    parentWindow.swipeBound = true;
+        }, {passive: true});
+        
+        parentWindow.swipeBound = true;
+    }
+} catch (e) {
+    console.warn("因跨網域或安全限制，滑動切換已停用");
 }
 </script>
 """, height=0, width=0)
@@ -105,9 +104,12 @@ def save_members(members):
 
 @st.cache_resource
 def load_ocr_reader():
-    if HAS_EASYOCR:
+    try:
+        import easyocr
         return easyocr.Reader(['ch_tra', 'en'])
-    return None
+    except Exception as e:
+        st.error(f"OCR 模組載入失敗: {e}")
+        return None
 
 # --- 資料讀取與自動修正 ---
 def load_all_data():
@@ -120,6 +122,11 @@ def load_all_data():
             try:
                 # 加上 on_bad_lines='skip' 防止讀取亂碼時崩潰
                 df = pd.read_csv(DATA_FILE, on_bad_lines='skip')
+            except TypeError:
+                try: # 兼容舊版 Pandas (< 1.3.0)
+                    df = pd.read_csv(DATA_FILE, error_bad_lines=False)
+                except Exception:
+                    df = pd.DataFrame(columns=default_columns)
             except Exception:
                 df = pd.DataFrame(columns=default_columns)
         
@@ -247,13 +254,14 @@ with tab1:
             st.write("#### :material/add_a_photo: 掃描收據")
             uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"], label_visibility="collapsed")
             if uploaded_file and st.button(":material/rocket_launch: 執行辨識", use_container_width=True):
-                if HAS_EASYOCR:
-                    with st.spinner("辨識中..."):
+                with st.spinner("載入模型與辨識中..."):
+                    reader = load_ocr_reader()
+                    if reader is not None:
                         items, total = process_receipt(Image.open(uploaded_file))
                         st.session_state['pending_items'] = items
                         st.session_state['detected_total'] = total
-                else:
-                    st.error("系統尚未安裝 easyocr 套件，無法進行影像辨識。")
+                    else:
+                        st.error("系統無法載入 easyocr 套件，請確認是否安裝正確。")
 
     # 只要有待處理品項，或者剛剛執行過影像掃描（有產生 detected_total），就顯示緩衝區
     show_buffer = len(st.session_state['pending_items']) > 0 or ('detected_total' in st.session_state)
@@ -379,9 +387,17 @@ with tab2:
 
         st.divider()
         st.write("#### :material/payments: 詳細結算表")
-        st.dataframe(pd.DataFrame(summary).style.format(precision=1).map(
-            lambda v: 'color: #D32F2F; font-weight: bold;' if v < 0 else 'color: #388E3C; font-weight: bold;', subset=['結算餘額']
-        ), use_container_width=True, hide_index=True)
+        
+        summary_df = pd.DataFrame(summary)
+        if not summary_df.empty:
+            styler = summary_df.style.format(precision=1)
+            style_func = lambda v: 'color: #D32F2F; font-weight: bold;' if v < 0 else 'color: #388E3C; font-weight: bold;'
+            # 兼容不同 Pandas 版本
+            if hasattr(styler, "map"):
+                styler = styler.map(style_func, subset=['結算餘額'])
+            else:
+                styler = styler.applymap(style_func, subset=['結算餘額'])
+            st.dataframe(styler, use_container_width=True, hide_index=True)
 
 with tab3:
     st.write("#### :material/history: 歷史明細編輯器")
