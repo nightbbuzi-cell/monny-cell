@@ -115,6 +115,7 @@ def load_all_data():
     df = pd.read_csv(DATA_FILE)
     if "記錄者" not in df.columns:
         df["記錄者"] = "未知" # 保護舊資料不會報錯
+    df["記錄者"] = df["記錄者"].fillna(current_user if 'current_user' in locals() else "未知") # 確保沒有空值
         
     # 自動轉換舊版的分帳模式名稱為新版
     df["分帳模式"] = df["分帳模式"].replace({
@@ -352,6 +353,12 @@ with tab3:
         key="history_editor"
     )
     if st.button(":material/save: 保存編輯器變更", type="primary"):
+        # 防呆：處理在編輯器中新增資料時，因鎖定欄位(記錄者)或忘記填寫而產生的空值
+        edited_df['記錄者'] = edited_df['記錄者'].fillna(current_user)
+        edited_df.loc[edited_df['記錄者'] == "", '記錄者'] = current_user
+        edited_df['日期'] = edited_df['日期'].fillna(datetime.now().strftime("%Y-%m-%d"))
+        edited_df.loc[edited_df['日期'] == "", '日期'] = datetime.now().strftime("%Y-%m-%d")
+        
         save_full_df(edited_df)
         st.success("已更新資料庫！")
         st.rerun()
