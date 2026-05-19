@@ -17,7 +17,7 @@ st.set_page_config(page_title="智慧記帳 - 專業防重複版", layout="wide"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "group_expense_data.csv")
 MEMBERS_FILE = os.path.join(BASE_DIR, "group_members.txt")
-DEFAULT_MEMBERS = ["陳胤翔", "鄭宇廷", "朋友A"]
+DEFAULT_MEMBERS = []
 
 def load_members():
     if os.path.exists(MEMBERS_FILE):
@@ -109,15 +109,19 @@ with st.sidebar:
                 st.warning("此成員已在群組中喔！")
                 
     with st.expander(":material/person_remove: 移除成員", expanded=False):
-        member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
-        if st.button("確認移除", type="primary"):
-            if len(GROUP_MEMBERS) > 1:
+        if GROUP_MEMBERS:
+            member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
+            if st.button("確認移除", type="primary"):
                 GROUP_MEMBERS.remove(member_to_remove)
                 save_members(GROUP_MEMBERS)
                 st.session_state['group_members'] = GROUP_MEMBERS
                 st.rerun()
-            else:
-                st.warning("群組至少要保留一名成員喔！")
+        else:
+            st.info("目前沒有成員可移除。")
+
+    if not GROUP_MEMBERS:
+        st.warning("👉 請先從上方新增至少一名成員，才能開始使用系統喔！")
+        st.stop()
 
     current_user = st.selectbox(":material/person: 您是哪位？ (當前操作者)", GROUP_MEMBERS)
     st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
