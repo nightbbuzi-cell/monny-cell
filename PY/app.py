@@ -178,7 +178,7 @@ if not GROUP_MEMBERS:
 # --- 主畫面頂部 (乾淨標題與操作者切換) ---
 c_title, c_user = st.columns([3, 1])
 with c_title:
-    st.title(":material/account_balance_wallet: 智慧記帳")
+    st.title(":material/account_balance_wallet: 你最信賴的好夥伴")
 with c_user:
     st.write("") # 微調垂直對齊
     current_user = st.selectbox(":material/person: 操作者", GROUP_MEMBERS, help="預設記帳人", label_visibility="collapsed")
@@ -384,3 +384,11 @@ with tab4:
         if st.button(":material/delete: 清空所有歷史紀錄", type="primary"):
             save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
             st.rerun()
+
+# --- 頁尾 (Footer) ---
+st.markdown("""
+    <div style='text-align: center; color: #888; font-size: 13px; margin-top: 50px;'>
+        多媒高金生團隊製作<br>
+        Copyright &copy; All Rights Reserved.
+    </div>
+""", unsafe_allow_html=True)
