@@ -14,8 +14,9 @@ import os
 
 # --- 基礎設定 ---
 st.set_page_config(page_title="智慧記帳 - 專業防重複版", layout="wide")
-DATA_FILE = "group_expense_data.csv"
-MEMBERS_FILE = "group_members.txt"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, "group_expense_data.csv")
+MEMBERS_FILE = os.path.join(BASE_DIR, "group_members.txt")
 DEFAULT_MEMBERS = ["陳胤翔", "鄭宇廷", "朋友A"]
 
 def load_members():
@@ -73,7 +74,7 @@ def process_receipt(image):
                         price = float(pv[:2] if len(pv) >= 3 and int(pv) > 100 else pv)
                         break
                 if name: items.append({"name": name, "price": price})
-            except: continue
+            except Exception: continue
     for i, line in enumerate(results):
         if any(k in line for k in ["發票金額", "付現", "總計", "現金"]):
             nums = re.findall(r'\d+', "".join(results[i:i+2]))
@@ -81,7 +82,7 @@ def process_receipt(image):
     return items, total
 
 # --- UI 介面 ---
-st.title("💰 智慧記帳：專業防重複系統")
+st.title("💰 智慧記帳：專業防重複系統 (✨ 雲端更新版)")
 
 if 'group_members' not in st.session_state:
     st.session_state['group_members'] = load_members()
