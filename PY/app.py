@@ -99,10 +99,6 @@ def process_receipt(image):
     return items, total
 
 # --- UI 介面 ---
-st.title(":material/account_balance_wallet: 智慧記帳：專業防重複系統 (:material/stars: 雲端更新版)")
-st.markdown("##### :material/receipt_long: 輕鬆管理群組帳務，支援收據自動辨識、手動記帳與自動分帳計算！")
-st.divider()
-
 if 'group_members' not in st.session_state:
     st.session_state['group_members'] = load_members()
 GROUP_MEMBERS = st.session_state['group_members']
@@ -110,18 +106,18 @@ GROUP_MEMBERS = st.session_state['group_members']
 if 'pending_items' not in st.session_state:
     st.session_state['pending_items'] = []
 
-# --- 初始導引 (Onboarding) ---
+# --- 初始導引 (Apple 風格歡迎畫面) ---
 if not GROUP_MEMBERS:
-    st.info("👋 **歡迎來到智慧記帳系統！**")
-    st.write("#### 🚀 第一步：請先建立您的記帳成員名單")
-    st.caption("請輸入您或夥伴的名稱，加入第一位成員後即可解鎖完整的記帳功能！")
+    st.title(":material/waving_hand: 歡迎使用智慧記帳")
+    st.markdown("#### 為了給您最舒適的體驗，請先設定第一位成員。")
+    st.caption("這通常是您自己。未來您可以隨時在「設定」中加入其他夥伴！")
     
     with st.container(border=True):
         col_m, col_btn = st.columns([3, 1])
         with col_m:
-            first_member = st.text_input("輸入新成員名稱", placeholder="例如：自己、小明...", label_visibility="collapsed")
+            first_member = st.text_input("輸入您的名稱", placeholder="例如：自己、小明...", label_visibility="collapsed")
         with col_btn:
-            if st.button(":material/person_add: 建立成員", type="primary", use_container_width=True):
+            if st.button(":material/person_add: 開始使用", type="primary", use_container_width=True):
                 if first_member and first_member not in GROUP_MEMBERS:
                     GROUP_MEMBERS.append(first_member)
                     save_members(GROUP_MEMBERS)
@@ -129,60 +125,22 @@ if not GROUP_MEMBERS:
                     st.rerun()
                 elif first_member in GROUP_MEMBERS:
                     st.warning("此成員已存在喔！")
-    st.stop() # 停止渲染後續的側邊欄與記帳介面
+    st.stop() 
 
-# --- 步驟一：群組與個人設定 ---
-st.write("### :material/group: 第一步：選擇操作者與群組管理")
-with st.container(border=True):
-    c_user, c_manage = st.columns([1.2, 1])
-    
-    with c_user:
-        current_user = st.selectbox(":material/person: 您是哪位？ (當前操作者)", GROUP_MEMBERS)
-        st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
-        
-    with c_manage:
-        with st.expander(f":material/manage_accounts: 管理成員 (共 {len(GROUP_MEMBERS)} 人)"):
-            new_member = st.text_input("輸入新成員名稱")
-            if st.button("加入群組", use_container_width=True) and new_member:
-                if new_member not in GROUP_MEMBERS:
-                    GROUP_MEMBERS.append(new_member)
-                    save_members(GROUP_MEMBERS)
-                    st.session_state['group_members'] = GROUP_MEMBERS
-                    st.success(f"已將 {new_member} 加入群組！")
-                    st.rerun()
-                else:
-                    st.warning("此成員已在群組中喔！")
-                    
-            st.divider()
-            if GROUP_MEMBERS:
-                member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
-                if st.button("確認移除", type="primary", use_container_width=True):
-                    GROUP_MEMBERS.remove(member_to_remove)
-                    save_members(GROUP_MEMBERS)
-                    st.session_state['group_members'] = GROUP_MEMBERS
-                    st.rerun()
-            else:
-                st.info("目前沒有成員可移除。")
-                
-        with st.expander(":material/settings: 系統與資料庫設定"):
-            if os.path.exists(DATA_FILE):
-                file_size_kb = os.path.getsize(DATA_FILE) / 1024
-                st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB")
-                record_count = len(load_all_data())
-                st.caption(f":material/receipt: 總記帳筆數: {record_count} 筆")
-                
-            if st.button(":material/delete: 清空所有歷史紀錄", type="primary", use_container_width=True):
-                save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
-                st.rerun()
+# --- 主畫面頂部 (乾淨標題與操作者切換) ---
+c_title, c_user = st.columns([3, 1])
+with c_title:
+    st.title(":material/account_balance_wallet: 智慧記帳")
+with c_user:
+    st.write("") # 微調垂直對齊
+    current_user = st.selectbox("👤 操作者", GROUP_MEMBERS, help="預設記帳人", label_visibility="collapsed")
 
-st.divider()
-st.write("### :material/account_balance_wallet: 第二步：帳務處理中心")
-
-# --- 循序漸進的主畫面分頁 ---
-tab1, tab2, tab3 = st.tabs([
-    ":material/edit_document: 1. 記帳輸入", 
-    ":material/payments: 2. 結算總覽", 
-    ":material/history: 3. 歷史修改"
+# --- Apple 風格：無感切換的四個底部標籤 (Tabs) ---
+tab1, tab2, tab3, tab4 = st.tabs([
+    ":material/edit_document: 記帳", 
+    ":material/payments: 結算", 
+    ":material/history: 明細",
+    ":material/settings: 設定"
 ])
 
 with tab1:
@@ -340,3 +298,41 @@ with tab3:
         save_full_df(edited_df)
         st.success("已更新資料庫！")
         st.rerun()
+
+with tab4:
+    st.write("#### 👥 成員管理")
+    c_add, c_rem = st.columns(2)
+    with c_add:
+        with st.container(border=True):
+            st.write("**➕ 新增成員**")
+            new_member = st.text_input("輸入新成員名稱", placeholder="輸入名稱...", label_visibility="collapsed")
+            if st.button("加入群組", use_container_width=True) and new_member:
+                if new_member not in GROUP_MEMBERS:
+                    GROUP_MEMBERS.append(new_member)
+                    save_members(GROUP_MEMBERS)
+                    st.session_state['group_members'] = GROUP_MEMBERS
+                    st.success(f"已加入 {new_member}")
+                    st.rerun()
+                else:
+                    st.warning("成員已存在")
+    with c_rem:
+        with st.container(border=True):
+            st.write("**➖ 移除成員**")
+            if GROUP_MEMBERS:
+                member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS, label_visibility="collapsed")
+                if st.button("確認移除", type="primary", use_container_width=True):
+                    GROUP_MEMBERS.remove(member_to_remove)
+                    save_members(GROUP_MEMBERS)
+                    st.session_state['group_members'] = GROUP_MEMBERS
+                    st.rerun()
+            else:
+                st.info("目前沒有可移除的成員。")
+                
+    st.divider()
+    st.write("#### ⚙️ 系統與資料庫")
+    if os.path.exists(DATA_FILE):
+        file_size_kb = os.path.getsize(DATA_FILE) / 1024
+        st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB | 總記帳筆數: {len(load_all_data())} 筆")
+        if st.button(":material/delete: 清空所有歷史紀錄", type="primary"):
+            save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
+            st.rerun()
