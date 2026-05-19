@@ -144,22 +144,6 @@ with st.sidebar:
     st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
     
     st.divider()
-    st.header(":material/document_scanner: 掃描收據")
-    uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"])
-    
-    if uploaded_file:
-        st.image(uploaded_file, caption="收據預覽", use_container_width=True)
-        
-    if uploaded_file and st.button(":material/rocket_launch: 執行辨識"):
-        if HAS_EASYOCR:
-            with st.spinner("辨識中..."):
-                items, total = process_receipt(Image.open(uploaded_file))
-                st.session_state['pending_items'] = items
-                st.session_state['detected_total'] = total
-        else:
-            st.error("系統尚未安裝 easyocr 套件，無法進行影像辨識。請在終端機執行 `pip install easyocr` 來安裝。")
-
-    st.divider()
     if os.path.exists(DATA_FILE):
         file_size_kb = os.path.getsize(DATA_FILE) / 1024
         st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB")
@@ -170,57 +154,71 @@ with st.sidebar:
         save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
         st.rerun()
 
-col1, col2 = st.columns([1, 1.2])
+# --- 循序漸進的主畫面分頁 ---
+tab1, tab2, tab3 = st.tabs([
+    ":material/edit_document: 1. 記帳輸入", 
+    ":material/payments: 2. 結算總覽", 
+    ":material/history: 3. 歷史修改"
+])
 
-with col1:
-    st.subheader(":material/edit_document: 帳務輸入 (緩衝區)")
-    
-    with st.expander(":material/add: 手動新增品項", expanded=False):
-        with st.form("manual_add", clear_on_submit=True):
-            mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
-            if st.form_submit_button("加入清單") and mn:
-                st.session_state['pending_items'].append({"name": mn, "price": mp}); st.rerun()
+with tab1:
+    input_c1, input_c2 = st.columns(2)
+    with input_c1:
+        with st.container(border=True):
+            st.write("#### ✍️ 手動輸入")
+            with st.form("manual_add", clear_on_submit=True):
+                mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
+                if st.form_submit_button("加入清單", use_container_width=True) and mn:
+                    st.session_state['pending_items'].append({"name": mn, "price": mp}); st.rerun()
+                    
+    with input_c2:
+        with st.container(border=True):
+            st.write("#### 📸 掃描收據")
+            uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"], label_visibility="collapsed")
+            if uploaded_file and st.button(":material/rocket_launch: 執行辨識", use_container_width=True):
+                if HAS_EASYOCR:
+                    with st.spinner("辨識中..."):
+                        items, total = process_receipt(Image.open(uploaded_file))
+                        st.session_state['pending_items'] = items
+                        st.session_state['detected_total'] = total
+                else:
+                    st.error("系統尚未安裝 easyocr 套件，無法進行影像辨識。")
 
     # 只要有待處理品項，或者剛剛執行過影像掃描（有產生 detected_total），就顯示緩衝區
     show_buffer = len(st.session_state['pending_items']) > 0 or ('detected_total' in st.session_state)
 
     if show_buffer:
+        st.divider()
         st.write("#### :material/hourglass_empty: 待確認明細")
         
         if 'detected_total' in st.session_state and st.session_state['detected_total'] > 0:
             st.info(f":material/receipt_long: 系統辨識收據總金額為：**${st.session_state['detected_total']}** (僅供參考)")
         
-        # --- 新增：確認與調整總品項數量 ---
         current_count = len(st.session_state['pending_items'])
         new_count = st.number_input(":material/format_list_numbered: 確認/調整總品項數量", min_value=0, value=current_count, step=1, help="若辨識數量有誤，可直接修改此數字，系統會自動為您增減輸入欄位。")
         
         if new_count != current_count:
             if new_count > current_count:
-                # 如果新數量比較多，補足缺少的空品項
                 for _ in range(new_count - current_count):
                     st.session_state['pending_items'].append({"name": "", "price": 0.0})
             else:
-                # 如果新數量比較少，從後面刪除多餘的品項
                 st.session_state['pending_items'] = st.session_state['pending_items'][:new_count]
             st.rerun()
 
-        # 用來存儲使用者在 UI 上修改後的結果
         confirmed_batch = []
         
         for idx, item in enumerate(st.session_state['pending_items']):
             with st.container(border=True):
-                # 第一排：品項、金額、刪除按鈕
-                c_n, c_p, c_del = st.columns([2, 1.5, 0.4])
+                c_n, c_p, c_del = st.columns([3, 2, 0.5])
                 un = c_n.text_input("品項", item['name'], key=f"n_{idx}")
                 up = c_p.number_input("金額", value=item['price'], key=f"p_{idx}")
                 
-                c_del.write(" ") # 佔位符
+                c_del.write(" ")
                 if c_del.button(":material/delete:", key=f"del_{idx}", help="刪除此項目"):
                     st.session_state['pending_items'].pop(idx)
                     st.rerun()
 
-                # 第二排：付錢者、模式、對象
-                c_payer, c_m, c_target = st.columns([1, 1.2, 1])
+                c_payer, c_m, c_target = st.columns(3)
                 default_payer = GROUP_MEMBERS.index(current_user) if current_user in GROUP_MEMBERS else 0
                 u_payer = c_payer.selectbox("付錢者", GROUP_MEMBERS, index=default_payer, key=f"payer_{idx}")
                 u_mode = c_m.selectbox("分帳模式", ["個人花費", "幫人代墊", "大家均分", "轉帳/還款"], key=f"m_{idx}")
@@ -247,9 +245,9 @@ with col1:
             df_tmp = load_all_data()
             df_tmp = pd.concat([df_tmp, pd.DataFrame(confirmed_batch)], ignore_index=True)
             save_full_df(df_tmp)
-            st.session_state['pending_items'] = [] # 清空緩衝區
+            st.session_state['pending_items'] = []
             if 'detected_total' in st.session_state:
-                del st.session_state['detected_total'] # 清除暫存金額
+                del st.session_state['detected_total']
             st.success("全部項目已入帳！")
             st.rerun()
             
@@ -258,15 +256,51 @@ with col1:
             if 'detected_total' in st.session_state:
                 del st.session_state['detected_total']
             st.rerun()
-    else:
-        st.info("目前沒有待處理項目。")
 
-with col2:
-    st.subheader(":material/bar_chart: 帳本清算中心")
-    placeholder = st.container()
+with tab2:
+    data = load_all_data()
+    if data.empty:
+        st.info("目前還沒有任何記帳紀錄喔！請先到「記帳輸入」新增帳目。")
+    else:
+        st.write("#### 💎 成員財務概況")
+        summary = []
+        num_m = len(GROUP_MEMBERS)
+        
+        # 為每個成員建立專屬的數據卡片
+        m_cols = st.columns(len(GROUP_MEMBERS) if len(GROUP_MEMBERS) > 0 else 1)
+        
+        for i, m in enumerate(GROUP_MEMBERS):
+            paid = data[data['誰付錢_代墊'] == m]['金額'].sum()
+            direct = data[(data['誰消費_應付'] == m) & (data['分帳模式'] != "轉帳/還款")]['金額'].sum()
+            split = data[data['誰消費_應付'] == '所有人']['金額'].sum() / num_m if num_m > 0 else 0
+            personal_total = direct + split
+            received = data[(data['誰消費_應付'] == m) & (data['分帳模式'] == "轉帳/還款")]['金額'].sum()
+            balance = paid - (personal_total + received)
+            
+            summary.append({"成員": m, "個人總消費": personal_total, "總付/代墊": paid, "結算餘額": balance})
+            
+            # 顯示個人總消費卡片與結算狀態
+            with m_cols[i]:
+                with st.container(border=True):
+                    st.metric(label=f"👤 {m} 的總消費", value=f"${personal_total:,.0f}")
+                    if balance > 0:
+                        st.markdown(f"**應收回：<span style='color:#388E3C;'>${balance:,.0f}</span>**", unsafe_allow_html=True)
+                    elif balance < 0:
+                        st.markdown(f"**須付款：<span style='color:#D32F2F;'>${abs(balance):,.0f}</span>**", unsafe_allow_html=True)
+                    else:
+                        st.markdown("**結算：$0**", unsafe_allow_html=True)
+
+        st.divider()
+        st.write("#### :material/payments: 詳細結算表")
+        st.dataframe(pd.DataFrame(summary).style.format(precision=1).map(
+            lambda v: 'color: #D32F2F; font-weight: bold;' if v < 0 else 'color: #388E3C; font-weight: bold;', subset=['結算餘額']
+        ), use_container_width=True, hide_index=True)
+
+with tab3:
+    st.write("#### :material/history: 歷史明細編輯器")
+    st.caption("💡 若發現帳目有誤，可直接在此表格內雙擊修改，修改後記得點擊下方儲存。")
     data = load_all_data()
     
-    st.write("#### :material/history: 歷史明細編輯器")
     edited_df = st.data_editor(
         data, num_rows="dynamic", use_container_width=True,
         column_config={
@@ -278,31 +312,7 @@ with col2:
         },
         key="history_editor"
     )
-
-    with placeholder:
-        st.write("#### :material/payments: 誰欠誰錢 (結算表)")
-        if not edited_df.empty:
-            summary = []
-            num_m = len(GROUP_MEMBERS)
-            for m in GROUP_MEMBERS:
-                paid = edited_df[edited_df['誰付錢_代墊'] == m]['金額'].sum()
-                
-                # 計算個人實際消費 (排除轉帳/還款，才不會讓還錢被算成吃喝花費)
-                direct = edited_df[(edited_df['誰消費_應付'] == m) & (edited_df['分帳模式'] != "轉帳/還款")]['金額'].sum()
-                split = edited_df[edited_df['誰消費_應付'] == '所有人']['金額'].sum() / num_m if num_m > 0 else 0
-                personal_total = direct + split
-                
-                # 計算收到的轉帳/還款
-                received = edited_df[(edited_df['誰消費_應付'] == m) & (edited_df['分帳模式'] == "轉帳/還款")]['金額'].sum()
-                
-                # 結算餘額 = 總付出的錢 - (自己花掉的錢 + 收到的錢)
-                balance = paid - (personal_total + received)
-                
-                summary.append({"成員": m, "個人總消費": personal_total, "總付/代墊": paid, "結算餘額": balance})
-                
-            st.dataframe(pd.DataFrame(summary).style.format(precision=1).map(
-                lambda v: 'color: #D32F2F; font-weight: bold;' if v < 0 else 'color: #388E3C; font-weight: bold;', subset=['結算餘額']
-            ), use_container_width=True, hide_index=True)
-
-    if st.button(":material/save: 保存編輯器變更"):
-        save_full_df(edited_df); st.success("已更新資料庫！"); st.rerun()
+    if st.button(":material/save: 保存編輯器變更", type="primary"):
+        save_full_df(edited_df)
+        st.success("已更新資料庫！")
+        st.rerun()
