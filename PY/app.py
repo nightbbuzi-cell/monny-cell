@@ -181,7 +181,7 @@ with c_title:
     st.title(":material/account_balance_wallet: 智慧記帳")
 with c_user:
     st.write("") # 微調垂直對齊
-    current_user = st.selectbox("👤 操作者", GROUP_MEMBERS, help="預設記帳人", label_visibility="collapsed")
+    current_user = st.selectbox(":material/person: 操作者", GROUP_MEMBERS, help="預設記帳人", label_visibility="collapsed")
 
 # --- Apple 風格：無感切換的四個底部標籤 (Tabs) ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -195,7 +195,7 @@ with tab1:
     input_c1, input_c2 = st.columns(2)
     with input_c1:
         with st.container(border=True):
-            st.write("#### ✍️ 手動輸入")
+            st.write("#### :material/edit_square: 手動輸入")
             with st.form("manual_add", clear_on_submit=True):
                 mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
                 if st.form_submit_button("加入清單", use_container_width=True) and mn:
@@ -203,7 +203,7 @@ with tab1:
                     
     with input_c2:
         with st.container(border=True):
-            st.write("#### 📸 掃描收據")
+            st.write("#### :material/add_a_photo: 掃描收據")
             uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"], label_visibility="collapsed")
             if uploaded_file and st.button(":material/rocket_launch: 執行辨識", use_container_width=True):
                 if HAS_EASYOCR:
@@ -258,9 +258,9 @@ with tab1:
                     target_consumer = c_target.selectbox("對象", GROUP_MEMBERS, key=f"t_{idx}")
                 elif u_mode == "大家均分":
                     target_consumer = "所有人"
-                    c_target.info("👉 所有人平分")
+                    c_target.info(":material/subdirectory_arrow_right: 所有人平分")
                 else:
-                    c_target.info(f"👉 {u_payer} 自己負擔")
+                    c_target.info(f":material/subdirectory_arrow_right: {u_payer} 自己負擔")
                 
                 confirmed_batch.append({
                     "日期": datetime.now().strftime("%Y-%m-%d"),
@@ -292,7 +292,7 @@ with tab2:
     if data.empty:
         st.info("目前還沒有任何記帳紀錄喔！請先到「記帳輸入」新增帳目。")
     else:
-        st.write("#### 💎 成員財務概況")
+        st.write("#### :material/account_balance: 成員財務概況")
         summary = []
         num_m = len(GROUP_MEMBERS)
         
@@ -312,7 +312,7 @@ with tab2:
             # 顯示個人總消費卡片與結算狀態
             with m_cols[i]:
                 with st.container(border=True):
-                    st.metric(label=f"👤 {m} 的總消費", value=f"${personal_total:,.0f}")
+                    st.metric(label=f":material/person: {m} 的總消費", value=f"${personal_total:,.0f}")
                     if balance > 0:
                         st.markdown(f"**應收回：<span style='color:#388E3C;'>${balance:,.0f}</span>**", unsafe_allow_html=True)
                     elif balance < 0:
@@ -328,7 +328,7 @@ with tab2:
 
 with tab3:
     st.write("#### :material/history: 歷史明細編輯器")
-    st.caption("💡 若發現帳目有誤，可直接在此表格內雙擊修改，修改後記得點擊下方儲存。")
+    st.caption(":material/lightbulb: 若發現帳目有誤，可直接在此表格內雙擊修改，修改後記得點擊下方儲存。")
     data = load_all_data()
     
     edited_df = st.data_editor(
@@ -348,11 +348,11 @@ with tab3:
         st.rerun()
 
 with tab4:
-    st.write("#### 👥 成員管理")
+    st.write("#### :material/group: 成員管理")
     c_add, c_rem = st.columns(2)
     with c_add:
         with st.container(border=True):
-            st.write("**➕ 新增成員**")
+            st.write("**:material/person_add: 新增成員**")
             new_member = st.text_input("輸入新成員名稱", placeholder="輸入名稱...", label_visibility="collapsed")
             if st.button("加入群組", use_container_width=True) and new_member:
                 if new_member not in GROUP_MEMBERS:
@@ -365,7 +365,7 @@ with tab4:
                     st.warning("成員已存在")
     with c_rem:
         with st.container(border=True):
-            st.write("**➖ 移除成員**")
+            st.write("**:material/person_remove: 移除成員**")
             if GROUP_MEMBERS:
                 member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS, label_visibility="collapsed")
                 if st.button("確認移除", type="primary", use_container_width=True):
@@ -377,7 +377,7 @@ with tab4:
                 st.info("目前沒有可移除的成員。")
                 
     st.divider()
-    st.write("#### ⚙️ 系統與資料庫")
+    st.write("#### :material/database: 系統與資料庫")
     if os.path.exists(DATA_FILE):
         file_size_kb = os.path.getsize(DATA_FILE) / 1024
         st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB | 總記帳筆數: {len(load_all_data())} 筆")
