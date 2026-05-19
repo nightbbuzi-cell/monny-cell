@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from PIL import Image
+import streamlit.components.v1 as components
 
 try:
     import easyocr
@@ -24,6 +25,53 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+# --- 📱 注入手機版滑動切換分頁 (Swipe to switch tabs) 的 JavaScript ---
+components.html("""
+<script>
+const parentWindow = window.parent;
+const doc = parentWindow.document;
+
+// 防止重新載入時重複綁定監聽器
+if (!parentWindow.swipeBound) {
+    let touchstartX = 0;
+    let touchstartY = 0;
+
+    doc.addEventListener('touchstart', e => {
+        touchstartX = e.changedTouches[0].screenX;
+        touchstartY = e.changedTouches[0].screenY;
+    }, {passive: true});
+
+    doc.addEventListener('touchend', e => {
+        let touchendX = e.changedTouches[0].screenX;
+        let touchendY = e.changedTouches[0].screenY;
+        
+        // 如果滑動位置在資料表(DataFrame)內，保留原生水平滾動，不切換分頁
+        if (e.target.closest('[data-testid="stDataFrame"]')) return;
+
+        const xDiff = touchendX - touchstartX;
+        const yDiff = touchendY - touchstartY;
+
+        // 判斷是否為水平滑動 (X軸位移大於Y軸，且滑動距離超過 50px)
+        if (Math.abs(xDiff) > Math.abs(yDiff) && Math.abs(xDiff) > 50) {
+            const tabs = Array.from(doc.querySelectorAll('button[role="tab"]'));
+            if (!tabs || tabs.length === 0) return;
+
+            const activeTabIndex = tabs.findIndex(tab => tab.getAttribute('aria-selected') === 'true');
+            if (activeTabIndex === -1) return;
+
+            if (xDiff < 0) { // 向左滑 -> 下一頁
+                if (activeTabIndex < tabs.length - 1) tabs[activeTabIndex + 1].click();
+            } else { // 向右滑 -> 上一頁
+                if (activeTabIndex > 0) tabs[activeTabIndex - 1].click();
+            }
+        }
+    }, {passive: true});
+    
+    parentWindow.swipeBound = true;
+}
+</script>
+""", height=0, width=0)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "group_expense_data.csv")
