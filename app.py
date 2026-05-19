@@ -82,7 +82,7 @@ def process_receipt(image):
     return items, total
 
 # --- UI 介面 ---
-st.title("💰 智慧記帳：專業防重複系統")
+st.title("💰 智慧記帳：專業防重複系統 (✨ 雲端更新版)")
 
 if 'group_members' not in st.session_state:
     st.session_state['group_members'] = load_members()
