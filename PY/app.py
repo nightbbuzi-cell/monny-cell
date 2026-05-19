@@ -83,6 +83,8 @@ def process_receipt(image):
 
 # --- UI 介面 ---
 st.title("💰 智慧記帳：專業防重複系統 (✨ 雲端更新版)")
+st.markdown("##### 🧾 輕鬆管理群組帳務，支援收據自動辨識、手動記帳與自動分帳計算！")
+st.divider()
 
 if 'group_members' not in st.session_state:
     st.session_state['group_members'] = load_members()
