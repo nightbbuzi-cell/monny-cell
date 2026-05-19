@@ -40,10 +40,12 @@ reader = load_ocr_reader()
 # --- 資料讀取與自動修正 ---
 def load_all_data():
     if not os.path.exists(DATA_FILE):
-        df = pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式"])
+        df = pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"])
         df.to_csv(DATA_FILE, index=False)
         return df
     df = pd.read_csv(DATA_FILE)
+    if "記錄者" not in df.columns:
+        df["記錄者"] = "未知" # 保護舊資料不會報錯
     return df
 
 def save_full_df(df):
@@ -103,7 +105,8 @@ with st.sidebar:
             else:
                 st.warning("此成員已在群組中喔！")
 
-    current_user = st.selectbox("預設付錢者", GROUP_MEMBERS)
+    current_user = st.selectbox("👤 您是哪位？ (當前操作者)", GROUP_MEMBERS)
+    st.info(f"👋 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
     
     st.divider()
     st.header("📸 掃描收據")
@@ -123,7 +126,7 @@ with st.sidebar:
 
     st.divider()
     if st.button("🗑️ 清空所有歷史紀錄", type="primary"):
-        save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式"]))
+        save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
         st.rerun()
 
 col1, col2 = st.columns([1, 1.2])
@@ -184,7 +187,8 @@ with col1:
                 confirmed_batch.append({
                     "日期": datetime.now().strftime("%Y-%m-%d"),
                     "品項": un, "金額": up, "誰付錢_代墊": current_user, 
-                    "誰消費_應付": target_consumer, "分帳模式": u_mode
+                "誰消費_應付": target_consumer, "分帳模式": u_mode,
+                "記錄者": current_user
                 })
 
         st.divider()
@@ -219,7 +223,8 @@ with col2:
             "金額": st.column_config.NumberColumn(format="$%.1f"),
             "誰付錢_代墊": st.column_config.SelectboxColumn(options=GROUP_MEMBERS),
             "誰消費_應付": st.column_config.SelectboxColumn(options=GROUP_MEMBERS + ["所有人"]),
-            "分帳模式": st.column_config.SelectboxColumn(options=["全算我的", "指定某人", "大家均分"])
+            "分帳模式": st.column_config.SelectboxColumn(options=["全算我的", "指定某人", "大家均分"]),
+            "記錄者": st.column_config.TextColumn("📝 記錄者", disabled=True)
         },
         key="history_editor"
     )
