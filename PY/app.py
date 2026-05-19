@@ -58,6 +58,12 @@ def load_all_data():
     df = pd.read_csv(DATA_FILE)
     if "記錄者" not in df.columns:
         df["記錄者"] = "未知" # 保護舊資料不會報錯
+        
+    # 自動轉換舊版的分帳模式名稱為新版
+    df["分帳模式"] = df["分帳模式"].replace({
+        "全算我的": "個人花費",
+        "指定某人": "幫人代墊"
+    })
     return df
 
 def save_full_df(df):
@@ -203,27 +209,36 @@ with col1:
         
         for idx, item in enumerate(st.session_state['pending_items']):
             with st.container(border=True):
-                # 增加一個欄位給刪除按鈕
-                c_n, c_p, c_m, c_del = st.columns([2, 1, 1.5, 0.4])
+                # 第一排：品項、金額、刪除按鈕
+                c_n, c_p, c_del = st.columns([2, 1.5, 0.4])
                 un = c_n.text_input("品項", item['name'], key=f"n_{idx}")
                 up = c_p.number_input("金額", value=item['price'], key=f"p_{idx}")
-                u_mode = c_m.selectbox("分帳模式", ["全算我的", "指定某人", "大家均分"], key=f"m_{idx}")
                 
-                # 在新欄位中加入刪除按鈕，並透過 st.write 調整垂直位置
-                c_del.write(" ") # 佔位符，讓按鈕稍微往下對齊
+                c_del.write(" ") # 佔位符
                 if c_del.button(":material/delete:", key=f"del_{idx}", help="刪除此項目"):
                     st.session_state['pending_items'].pop(idx)
                     st.rerun()
 
-                target_consumer = current_user
-                if u_mode == "指定某人": target_consumer = st.selectbox("誰消費？", GROUP_MEMBERS, key=f"t_{idx}")
-                elif u_mode == "大家均分": target_consumer = "所有人"
+                # 第二排：付錢者、模式、對象
+                c_payer, c_m, c_target = st.columns([1, 1.2, 1])
+                default_payer = GROUP_MEMBERS.index(current_user) if current_user in GROUP_MEMBERS else 0
+                u_payer = c_payer.selectbox("付錢者", GROUP_MEMBERS, index=default_payer, key=f"payer_{idx}")
+                u_mode = c_m.selectbox("分帳模式", ["個人花費", "幫人代墊", "大家均分", "轉帳/還款"], key=f"m_{idx}")
+                
+                target_consumer = u_payer
+                if u_mode in ["幫人代墊", "轉帳/還款"]:
+                    target_consumer = c_target.selectbox("對象", GROUP_MEMBERS, key=f"t_{idx}")
+                elif u_mode == "大家均分":
+                    target_consumer = "所有人"
+                    c_target.info("👉 所有人平分")
+                else:
+                    c_target.info(f"👉 {u_payer} 自己負擔")
                 
                 confirmed_batch.append({
                     "日期": datetime.now().strftime("%Y-%m-%d"),
-                    "品項": un, "金額": up, "誰付錢_代墊": current_user, 
-                "誰消費_應付": target_consumer, "分帳模式": u_mode,
-                "記錄者": current_user
+                    "品項": un, "金額": up, "誰付錢_代墊": u_payer, 
+                    "誰消費_應付": target_consumer, "分帳模式": u_mode,
+                    "記錄者": current_user
                 })
 
         st.divider()
@@ -258,7 +273,7 @@ with col2:
             "金額": st.column_config.NumberColumn(format="$%.1f"),
             "誰付錢_代墊": st.column_config.SelectboxColumn(options=GROUP_MEMBERS),
             "誰消費_應付": st.column_config.SelectboxColumn(options=GROUP_MEMBERS + ["所有人"]),
-            "分帳模式": st.column_config.SelectboxColumn(options=["全算我的", "指定某人", "大家均分"]),
+            "分帳模式": st.column_config.SelectboxColumn(options=["個人花費", "幫人代墊", "大家均分", "轉帳/還款"]),
             "記錄者": st.column_config.TextColumn(":material/edit_document: 記錄者", disabled=True)
         },
         key="history_editor"
@@ -271,12 +286,23 @@ with col2:
             num_m = len(GROUP_MEMBERS)
             for m in GROUP_MEMBERS:
                 paid = edited_df[edited_df['誰付錢_代墊'] == m]['金額'].sum()
-                direct = edited_df[edited_df['誰消費_應付'] == m]['金額'].sum()
-                split = edited_df[edited_df['誰消費_應付'] == '所有人']['金額'].sum() / num_m
-                summary.append({"成員": m, "代墊金額": paid, "個人應付": direct + split, "餘額": paid - (direct + split)})
-            st.table(pd.DataFrame(summary).style.format(precision=1).map(
-                lambda v: 'color: red;' if v < 0 else 'color: green;', subset=['餘額']
-            ))
+                
+                # 計算個人實際消費 (排除轉帳/還款，才不會讓還錢被算成吃喝花費)
+                direct = edited_df[(edited_df['誰消費_應付'] == m) & (edited_df['分帳模式'] != "轉帳/還款")]['金額'].sum()
+                split = edited_df[edited_df['誰消費_應付'] == '所有人']['金額'].sum() / num_m if num_m > 0 else 0
+                personal_total = direct + split
+                
+                # 計算收到的轉帳/還款
+                received = edited_df[(edited_df['誰消費_應付'] == m) & (edited_df['分帳模式'] == "轉帳/還款")]['金額'].sum()
+                
+                # 結算餘額 = 總付出的錢 - (自己花掉的錢 + 收到的錢)
+                balance = paid - (personal_total + received)
+                
+                summary.append({"成員": m, "個人總消費": personal_total, "總付/代墊": paid, "結算餘額": balance})
+                
+            st.dataframe(pd.DataFrame(summary).style.format(precision=1).map(
+                lambda v: 'color: #D32F2F; font-weight: bold;' if v < 0 else 'color: #388E3C; font-weight: bold;', subset=['結算餘額']
+            ), use_container_width=True, hide_index=True)
 
     if st.button(":material/save: 保存編輯器變更"):
         save_full_df(edited_df); st.success("已更新資料庫！"); st.rerun()
