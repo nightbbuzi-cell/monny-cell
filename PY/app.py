@@ -109,38 +109,46 @@ def load_ocr_reader():
         return easyocr.Reader(['ch_tra', 'en'])
     return None
 
-reader = load_ocr_reader()
-
 # --- 資料讀取與自動修正 ---
 def load_all_data():
-    if not os.path.exists(DATA_FILE):
-        df = pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"])
-        df.to_csv(DATA_FILE, index=False)
-    else:
-        df = pd.read_csv(DATA_FILE)
+    default_columns = ["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]
+    try:
+        if not os.path.exists(DATA_FILE):
+            df = pd.DataFrame(columns=default_columns)
+            df.to_csv(DATA_FILE, index=False)
+        else:
+            try:
+                # 加上 on_bad_lines='skip' 防止讀取亂碼時崩潰
+                df = pd.read_csv(DATA_FILE, on_bad_lines='skip')
+            except Exception:
+                df = pd.DataFrame(columns=default_columns)
         
-    # 確保所有必要欄位存在 (防止舊版資料庫欄位缺失)
-    for col in ["日期", "品項", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]:
-        if col not in df.columns:
-            df[col] = "未知"
-    if "金額" not in df.columns:
-        df["金額"] = 0.0
+        # 確保所有必要欄位存在
+        for col in default_columns:
+            if col not in df.columns:
+                df[col] = "未知" if col != "金額" else 0.0
     
-    # --- 🛡️ 終極全域資料防呆與清洗 (徹底修復各種崩潰) ---
-    df["日期"] = df["日期"].fillna(datetime.now().strftime("%Y-%m-%d")).astype(str)
-    df["品項"] = df["品項"].fillna("").astype(str)
-    df["記錄者"] = df["記錄者"].fillna("未知").astype(str)
-    df['金額'] = pd.to_numeric(df['金額'], errors='coerce').fillna(0.0)
-    df['誰付錢_代墊'] = df['誰付錢_代墊'].fillna("未知").astype(str).str.strip()
-    df['誰消費_應付'] = df['誰消費_應付'].fillna("未知").astype(str).str.strip()
-    df['分帳模式'] = df['分帳模式'].fillna("個人花費").astype(str).str.strip()
+        # --- 🛡️ 終極全域資料防呆與清洗 ---
+        df["日期"] = df["日期"].fillna(datetime.now().strftime("%Y-%m-%d")).astype(str)
+        df["品項"] = df["品項"].fillna("").astype(str)
+        df["記錄者"] = df["記錄者"].fillna("未知").astype(str)
+        df['金額'] = pd.to_numeric(df['金額'], errors='coerce').fillna(0.0)
+        df['誰付錢_代墊'] = df['誰付錢_代墊'].fillna("未知").astype(str).str.strip()
+        df['誰消費_應付'] = df['誰消費_應付'].fillna("未知").astype(str).str.strip()
+        df['分帳模式'] = df['分帳模式'].fillna("個人花費").astype(str).str.strip()
         
-    # 自動轉換舊版的分帳模式名稱為新版
-    df["分帳模式"] = df["分帳模式"].replace({
-        "全算我的": "個人花費",
-        "指定某人": "幫人代墊"
-    })
-    return df
+        # 自動轉換舊版的分帳模式名稱為新版
+        df["分帳模式"] = df["分帳模式"].replace({
+            "全算我的": "個人花費",
+            "指定某人": "幫人代墊"
+        })
+        
+        # 剃除 Git 衝突標記或異常資料
+        df = df[~df["日期"].str.contains("<|=|>")]
+        return df
+    except Exception:
+        # 遇到任何毀滅性災難，回傳空表保平安，絕對不當機
+        return pd.DataFrame(columns=default_columns)
 
 def save_full_df(df):
     df.to_csv(DATA_FILE, index=False)
