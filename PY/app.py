@@ -131,45 +131,52 @@ if not GROUP_MEMBERS:
                     st.warning("此成員已存在喔！")
     st.stop() # 停止渲染後續的側邊欄與記帳介面
 
-with st.sidebar:
-    st.header(f":material/group: 群組與個人設定 (共 {len(GROUP_MEMBERS)} 人)")
+# --- 步驟一：群組與個人設定 ---
+st.write("### :material/group: 第一步：選擇操作者與群組管理")
+with st.container(border=True):
+    c_user, c_manage = st.columns([1.2, 1])
     
-    with st.expander(":material/person_add: 邀請/新增成員", expanded=False):
-        new_member = st.text_input("輸入新成員名稱")
-        if st.button("加入群組") and new_member:
-            if new_member not in GROUP_MEMBERS:
-                GROUP_MEMBERS.append(new_member)
-                save_members(GROUP_MEMBERS)
-                st.session_state['group_members'] = GROUP_MEMBERS
-                st.success(f"已將 {new_member} 加入群組！")
-                st.rerun()
-            else:
-                st.warning("此成員已在群組中喔！")
-                
-    with st.expander(":material/person_remove: 移除成員", expanded=False):
-        if GROUP_MEMBERS:
-            member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
-            if st.button("確認移除", type="primary"):
-                GROUP_MEMBERS.remove(member_to_remove)
-                save_members(GROUP_MEMBERS)
-                st.session_state['group_members'] = GROUP_MEMBERS
-                st.rerun()
-        else:
-            st.info("目前沒有成員可移除。")
-
-    current_user = st.selectbox(":material/person: 您是哪位？ (當前操作者)", GROUP_MEMBERS)
-    st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
-    
-    st.divider()
-    if os.path.exists(DATA_FILE):
-        file_size_kb = os.path.getsize(DATA_FILE) / 1024
-        st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB")
-        record_count = len(load_all_data())
-        st.caption(f":material/receipt: 總記帳筆數: {record_count} 筆")
+    with c_user:
+        current_user = st.selectbox(":material/person: 您是哪位？ (當前操作者)", GROUP_MEMBERS)
+        st.info(f":material/waving_hand: 哈囉，**{current_user}**！\n\n(您新增的帳目將會標記由您記錄)")
         
-    if st.button(":material/delete: 清空所有歷史紀錄", type="primary"):
-        save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
-        st.rerun()
+    with c_manage:
+        with st.expander(f":material/manage_accounts: 管理成員 (共 {len(GROUP_MEMBERS)} 人)"):
+            new_member = st.text_input("輸入新成員名稱")
+            if st.button("加入群組", use_container_width=True) and new_member:
+                if new_member not in GROUP_MEMBERS:
+                    GROUP_MEMBERS.append(new_member)
+                    save_members(GROUP_MEMBERS)
+                    st.session_state['group_members'] = GROUP_MEMBERS
+                    st.success(f"已將 {new_member} 加入群組！")
+                    st.rerun()
+                else:
+                    st.warning("此成員已在群組中喔！")
+                    
+            st.divider()
+            if GROUP_MEMBERS:
+                member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS)
+                if st.button("確認移除", type="primary", use_container_width=True):
+                    GROUP_MEMBERS.remove(member_to_remove)
+                    save_members(GROUP_MEMBERS)
+                    st.session_state['group_members'] = GROUP_MEMBERS
+                    st.rerun()
+            else:
+                st.info("目前沒有成員可移除。")
+                
+        with st.expander(":material/settings: 系統與資料庫設定"):
+            if os.path.exists(DATA_FILE):
+                file_size_kb = os.path.getsize(DATA_FILE) / 1024
+                st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB")
+                record_count = len(load_all_data())
+                st.caption(f":material/receipt: 總記帳筆數: {record_count} 筆")
+                
+            if st.button(":material/delete: 清空所有歷史紀錄", type="primary", use_container_width=True):
+                save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
+                st.rerun()
+
+st.divider()
+st.write("### :material/account_balance_wallet: 第二步：帳務處理中心")
 
 # --- 循序漸進的主畫面分頁 ---
 tab1, tab2, tab3 = st.tabs([
