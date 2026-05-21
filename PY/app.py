@@ -222,7 +222,7 @@ if not GROUP_MEMBERS:
 # --- 主畫面頂部 (乾淨標題與操作者切換) ---
 c_title, c_user = st.columns([3, 1])
 with c_title:
-    st.title(":material/account_balance_wallet: 你最信賴記帳的好夥伴")
+    st.title(":material/account_balance_wallet: 你最信賴的記帳好夥伴")
 with c_user:
     st.write("") # 微調垂直對齊
     current_user = st.selectbox(":material/person: 操作者", GROUP_MEMBERS, help="預設記帳人", label_visibility="collapsed")
