@@ -460,9 +460,18 @@ with tab4:
     if os.path.exists(DATA_FILE):
         file_size_kb = os.path.getsize(DATA_FILE) / 1024
         st.caption(f":material/save: 目前資料庫檔案大小: {file_size_kb:.2f} KB | 總記帳筆數: {len(load_all_data())} 筆")
-        if st.button(":material/delete: 清空所有歷史紀錄", type="primary"):
-            save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
-            st.rerun()
+        
+        c_db1, c_db2 = st.columns(2)
+        with c_db1:
+            if st.button(":material/delete: 清空歷史紀錄", type="primary", use_container_width=True):
+                save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
+                st.rerun()
+        with c_db2:
+            if st.button(":material/warning: 重置系統", type="primary", use_container_width=True, help="徹底清除成員與所有紀錄，返回初始畫面"):
+                if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
+                if os.path.exists(MEMBERS_FILE): os.remove(MEMBERS_FILE)
+                if 'group_members' in st.session_state: del st.session_state['group_members']
+                st.rerun()
 
 # --- 頁尾 (Footer) ---
 st.markdown("""
