@@ -9,7 +9,7 @@ import re
 import os
 
 # --- 基礎設定 ---
-st.set_page_config(page_title="多媒高金生隆重呈現", layout="wide")
+st.set_page_config(page_title="多媒高金生-記帳城市", layout="wide")
 
 # --- 🎨 自訂質感主題 (支援淺色/深色模式自動切換) ---
 st.markdown("""
