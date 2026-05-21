@@ -200,7 +200,7 @@ if 'pending_items' not in st.session_state:
 
 # --- 初始導引 (Apple 風格歡迎畫面) ---
 if not GROUP_MEMBERS:
-    st.title(":material/waving_hand: 歡迎使用智慧記帳")
+    st.title(":material/waving_hand: 歡迎使用多媒高金生記帳系統")
     st.markdown("#### 為了給您最舒適的體驗，請先設定第一位成員。")
     st.caption("這通常是您自己。未來您可以隨時在「設定」中加入其他夥伴！")
     
