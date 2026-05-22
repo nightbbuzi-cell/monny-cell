@@ -169,11 +169,13 @@ def process_receipt(image):
     img_array = np.array(image)
     results = reader.readtext(img_array, detail=0)
     items, total = [], 0.0
-    for i in range(len(results)):
-        line = results[i].strip()
+    
+    for i, line in enumerate(results):
+        line = line.strip()
         if "#" in line:
             try:
-                name = results[i+1] if len(line) <= 4 else line.split("#")[-1]
+                # 防呆：確保 i+1 不會超出陣列索引範圍
+                name = results[i+1] if (len(line) <= 4 and i + 1 < len(results)) else line.split("#")[-1]
                 name = "".join(re.findall(r'[\u4e00-\u9fa5]+', name))
                 price = 0.0
                 for nl in results[i+1 : i+4]:
@@ -184,10 +186,11 @@ def process_receipt(image):
                         break
                 if name: items.append({"name": name, "price": price})
             except Exception: continue
-    for i, line in enumerate(results):
+            
         if any(k in line for k in ["發票金額", "付現", "總計", "現金"]):
             nums = re.findall(r'\d+', "".join(results[i:i+2]))
-            if nums: total = float(nums[0]); break
+            if nums: total = float(nums[0])
+            
     return items, total
 
 # --- UI 介面 ---
@@ -323,7 +326,12 @@ with tab1:
         if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", use_container_width=True):
             if confirmed_batch: # 防呆：確保清單有東西才存，避免空陣列合併崩潰
                 df_tmp = load_all_data()
-                df_tmp = pd.concat([df_tmp, pd.DataFrame(confirmed_batch)], ignore_index=True)
+                new_df = pd.DataFrame(confirmed_batch)
+                # 避免 Pandas 2.1.0+ 在合併全空 DataFrame 時拋出 FutureWarning
+                if df_tmp.empty or df_tmp.dropna(how='all').empty:
+                    df_tmp = new_df
+                else:
+                    df_tmp = pd.concat([df_tmp, new_df], ignore_index=True)
                 save_full_df(df_tmp)
             st.session_state['pending_items'] = []
             if 'detected_total' in st.session_state:
