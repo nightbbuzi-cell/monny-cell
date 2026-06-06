@@ -172,18 +172,25 @@ def process_receipt(image):
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
-        # 2. 影像預處理：Tesseract 必須經過濾鏡處理才能有好的辨識率
-        # (A) 放大圖片：Tesseract 看不懂太小的字，如果圖片太小先放大兩倍
-        if image.width < 1000 or image.height < 1000:
-            image = image.resize((image.width * 2, image.height * 2))
+        # 2. 影像預處理：打造「極致掃描機」效果
+        # (A) 智能放大：將短邊至少放大到 1500 像素，確保所有細小字體都能被看清
+        width, height = image.size
+        min_edge = min(width, height)
+        if min_edge < 1500:
+            ratio = 1500 / min_edge
+            # 使用高質量的縮放演算法 (若 Pillow 版本較舊，容錯處理)
+            resample_filter = getattr(Image, 'Resampling', Image).LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
+            image = image.resize((int(width * ratio), int(height * ratio)), resample_filter)
             
-        image.thumbnail((2000, 2000)) # 限制最大尺寸避免雲端記憶體爆掉
+        image.thumbnail((2500, 2500)) # 限制最大尺寸避免雲端記憶體爆掉
         
-        # (B) 轉為灰階 (去除發票背景色或紅色印章的干擾)
+        # (B) 色彩常規化與去色：自動校正曝光，修正背光或陰影
+        image = ImageOps.autocontrast(image)
         image = ImageOps.grayscale(image)
-        # (C) 提升對比度與銳利度 (讓黑字更黑，白底更白，字體邊緣更清晰)
-        image = ImageEnhance.Contrast(image).enhance(2.0)
-        image = ImageEnhance.Sharpness(image).enhance(2.0)
+        # (C) 暴力提升對比與銳利度 (徹底洗掉紙張底色與浮水印)
+        image = ImageEnhance.Brightness(image).enhance(1.2) # 稍微調亮
+        image = ImageEnhance.Contrast(image).enhance(3.0)   # 強烈對比
+        image = ImageEnhance.Sharpness(image).enhance(3.0)  # 極致銳利
 
         # 改用 pytesseract 辨識
         # 加入 --psm 4 參數：告訴 AI 這是「單欄但大小不一」的文字（適合發票與明細）
@@ -210,7 +217,9 @@ def process_receipt(image):
         
         # --- 1. 找總金額 ---
         if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付"]):
-            nums = re.findall(r'\d+', "".join(results[i:i+3]).replace(',', ''))
+            # 修復 Tesseract 常見數字誤判：英文 O、多餘空白、金錢符號
+            search_text = "".join(results[i:i+3]).replace('O', '0').replace('o', '0').replace(' ', '').replace(',', '').replace('$', '')
+            nums = re.findall(r'\d+', search_text)
             if nums:
                 for n in reversed(nums):
                     if float(n) > 0:
@@ -229,7 +238,9 @@ def process_receipt(image):
             
             # 往後看 1~3 行尋找對應的金額
             for nl in results[i+1 : i+4]:
-                nums = re.findall(r'\d+', nl.replace(',', ''))
+                # 同樣在此修正金額常見的誤判問題
+                nl_clean = nl.replace('O', '0').replace('o', '0').replace(' ', '').replace(',', '').replace('$', '')
+                nums = re.findall(r'\d+', nl_clean)
                 if nums:
                     try:
                         p_val = float(nums[0])
