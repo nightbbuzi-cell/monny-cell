@@ -475,11 +475,11 @@ with tab4:
         
         c_db1, c_db2 = st.columns(2)
         with c_db1:
-            if st.button(":material/delete: 清空歷史紀錄", type="primary", use_container_width=True):
+            if st.button(":material/delete: 清空歷史紀錄", type="primary", width="stretch"):
                 save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
                 st.rerun()
         with c_db2:
-            if st.button(":material/warning: 重置系統", type="primary", use_container_width=True, help="徹底清除成員與所有紀錄，返回初始畫面"):
+            if st.button(":material/warning: 重置系統", type="primary", width="stretch", help="徹底清除成員與所有紀錄，返回初始畫面"):
                 if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
                 if os.path.exists(MEMBERS_FILE): os.remove(MEMBERS_FILE)
                 if 'group_members' in st.session_state: del st.session_state['group_members']
