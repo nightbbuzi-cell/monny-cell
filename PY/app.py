@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime
 from PIL import Image
-import streamlit.components.v1 as components
 
 import numpy as np
 import re
@@ -31,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 📱 注入手機版滑動切換分頁 (Swipe to switch tabs) 的 JavaScript ---
-components.html("""
+st.html("""
 <script>
 try {
     const parentWindow = window.parent;
@@ -79,7 +78,7 @@ try {
     console.warn("因跨網域或安全限制，滑動切換已停用");
 }
 </script>
-""", height=0, width=0)
+""")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "group_expense_data.csv")
@@ -166,8 +165,21 @@ def process_receipt(image):
     if reader is None:
         return [], 0.0
         
-    img_array = np.array(image)
-    results = reader.readtext(img_array, detail=0)
+    try:
+        # 1. 確保圖片為 RGB 格式，避免透明通道 (RGBA) 造成模型解析報錯
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+            
+        # 2. 壓縮圖片尺寸：限制最大長寬為 1024 像素，並保持原始比例
+        # (這會把記憶體與 CPU 的消耗量降低 70%~90%，且對發票文字辨識率影響極小)
+        image.thumbnail((1024, 1024))
+        
+        img_array = np.array(image)
+        results = reader.readtext(img_array, detail=0)
+    except Exception as e:
+        st.error(f"影像辨識處理發生異常: {str(e)}")
+        return [], 0.0
+
     items, total = [], 0.0
     for i in range(len(results)):
         line = results[i].strip()
@@ -209,7 +221,7 @@ if not GROUP_MEMBERS:
         with col_m:
             first_member = st.text_input("輸入您的名稱", placeholder="例如：自己、小明...", label_visibility="collapsed")
         with col_btn:
-            if st.button(":material/person_add: 開始使用", type="primary", use_container_width=True):
+            if st.button(":material/person_add: 開始使用", type="primary", width="stretch"):
                 if first_member and first_member not in GROUP_MEMBERS:
                     GROUP_MEMBERS.append(first_member)
                     save_members(GROUP_MEMBERS)
@@ -242,7 +254,7 @@ with tab1:
             st.write("#### :material/edit_square: 手動輸入")
             with st.form("manual_add", clear_on_submit=True):
                 mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
-                submitted = st.form_submit_button("加入清單", use_container_width=True)
+                submitted = st.form_submit_button("加入清單", width="stretch")
                 
             # 將 st.rerun 移出 form 範圍，徹底解決崩潰問題
             if submitted and mn:
@@ -253,7 +265,7 @@ with tab1:
         with st.container(border=True):
             st.write("#### :material/add_a_photo: 掃描收據")
             uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"], label_visibility="collapsed")
-            if uploaded_file and st.button(":material/rocket_launch: 執行辨識", use_container_width=True):
+            if uploaded_file and st.button(":material/rocket_launch: 執行辨識", width="stretch"):
                 with st.spinner("載入模型與辨識中..."):
                     reader = load_ocr_reader()
                     if reader is not None:
@@ -320,7 +332,7 @@ with tab1:
 
         st.divider()
         c_btn1, c_btn2 = st.columns(2)
-        if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", use_container_width=True):
+        if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", width="stretch"):
             if confirmed_batch: # 防呆：確保清單有東西才存，避免空陣列合併崩潰
                 df_tmp = load_all_data()
                 df_tmp = pd.concat([df_tmp, pd.DataFrame(confirmed_batch)], ignore_index=True)
@@ -331,7 +343,7 @@ with tab1:
             st.success("全部項目已入帳！")
             st.rerun()
             
-        if c_btn2.button(":material/cancel: 全部捨棄", use_container_width=True):
+        if c_btn2.button(":material/cancel: 全部捨棄", width="stretch"):
             st.session_state['pending_items'] = []
             if 'detected_total' in st.session_state:
                 del st.session_state['detected_total']
@@ -397,7 +409,7 @@ with tab2:
                 styler = styler.map(style_func, subset=['結算餘額'])
             else:
                 styler = styler.applymap(style_func, subset=['結算餘額'])
-            st.dataframe(styler, use_container_width=True, hide_index=True)
+            st.dataframe(styler, width="stretch", hide_index=True)
 
 with tab3:
     st.write("#### :material/history: 歷史明細編輯器")
@@ -405,7 +417,7 @@ with tab3:
     data = load_all_data()
     
     edited_df = st.data_editor(
-        data, num_rows="dynamic", use_container_width=True,
+        data, num_rows="dynamic", width="stretch",
         column_config={
             "金額": st.column_config.NumberColumn(format="$%.1f"),
             "誰付錢_代墊": st.column_config.SelectboxColumn(options=GROUP_MEMBERS),
@@ -433,7 +445,7 @@ with tab4:
         with st.container(border=True):
             st.write("**:material/person_add: 新增成員**")
             new_member = st.text_input("輸入新成員名稱", placeholder="輸入名稱...", label_visibility="collapsed")
-            if st.button("加入群組", use_container_width=True) and new_member:
+            if st.button("加入群組", width="stretch") and new_member:
                 if new_member not in GROUP_MEMBERS:
                     GROUP_MEMBERS.append(new_member)
                     save_members(GROUP_MEMBERS)
@@ -447,7 +459,7 @@ with tab4:
             st.write("**:material/person_remove: 移除成員**")
             if GROUP_MEMBERS:
                 member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS, label_visibility="collapsed")
-                if st.button("確認移除", type="primary", use_container_width=True):
+                if st.button("確認移除", type="primary", width="stretch"):
                     GROUP_MEMBERS.remove(member_to_remove)
                     save_members(GROUP_MEMBERS)
                     st.session_state['group_members'] = GROUP_MEMBERS
