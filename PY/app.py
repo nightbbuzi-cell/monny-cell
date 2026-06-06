@@ -184,13 +184,10 @@ def process_receipt(image):
             
         image.thumbnail((2500, 2500)) # 限制最大尺寸避免雲端記憶體爆掉
         
-        # (B) 色彩常規化與去色：自動校正曝光，修正背光或陰影
-        image = ImageOps.autocontrast(image)
+        # (B) 溫和的影像處理：過度的對比和銳化會破壞「中文字」的筆畫，導致 Tesseract 變成瞎子
         image = ImageOps.grayscale(image)
-        # (C) 暴力提升對比與銳利度 (徹底洗掉紙張底色與浮水印)
-        image = ImageEnhance.Brightness(image).enhance(1.2) # 稍微調亮
-        image = ImageEnhance.Contrast(image).enhance(3.0)   # 強烈對比
-        image = ImageEnhance.Sharpness(image).enhance(3.0)  # 極致銳利
+        image = ImageEnhance.Contrast(image).enhance(1.5)   # 只需要稍微加深字體即可
+        # 移除暴力的銳化與自動曝光，保留原始字體的完整輪廓
 
         # 改用 pytesseract 辨識
         # 加入 --psm 4 參數：告訴 AI 這是「單欄但大小不一」的文字（適合發票與明細）
