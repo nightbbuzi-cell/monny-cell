@@ -104,10 +104,12 @@ def save_members(members):
 @st.cache_resource
 def load_ocr_reader():
     try:
-        import easyocr
-        return easyocr.Reader(['ch_tra', 'en'])
+        import pytesseract
+        # 測試是否成功載入
+        pytesseract.get_tesseract_version()
+        return pytesseract
     except Exception as e:
-        st.error(f"OCR 模組載入失敗: {e}")
+        st.error(f"OCR 模組載入失敗 (請確認已安裝 tesseract 系統套件): {e}")
         return None
 
 # --- 資料讀取與自動修正 ---
@@ -173,8 +175,9 @@ def process_receipt(image):
         # 2. 壓縮圖片尺寸：稍微提升到 1600，讓小字體(收據品項)有足夠解析度被看清
         image.thumbnail((1600, 1600))
         
-        img_array = np.array(image)
-        results = reader.readtext(img_array, detail=0)
+        # 改用 pytesseract 辨識
+        raw_text = reader.image_to_string(image, lang='chi_tra+eng')
+        results = [line.strip() for line in raw_text.split('\n') if line.strip()]
     except Exception as e:
         st.error(f"影像辨識處理發生異常: {str(e)}")
         return [], 0.0
