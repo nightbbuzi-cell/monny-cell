@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from PIL import Image
+from PIL import Image, ImageEnhance, ImageOps
 
 import numpy as np
 import re
@@ -172,11 +172,23 @@ def process_receipt(image):
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
-        # 2. 壓縮圖片尺寸：稍微提升到 1600，讓小字體(收據品項)有足夠解析度被看清
-        image.thumbnail((1600, 1600))
+        # 2. 影像預處理：Tesseract 必須經過濾鏡處理才能有好的辨識率
+        # (A) 放大圖片：Tesseract 看不懂太小的字，如果圖片太小先放大兩倍
+        if image.width < 1000 or image.height < 1000:
+            image = image.resize((image.width * 2, image.height * 2))
+            
+        image.thumbnail((2000, 2000)) # 限制最大尺寸避免雲端記憶體爆掉
         
+        # (B) 轉為灰階 (去除發票背景色或紅色印章的干擾)
+        image = ImageOps.grayscale(image)
+        # (C) 提升對比度與銳利度 (讓黑字更黑，白底更白，字體邊緣更清晰)
+        image = ImageEnhance.Contrast(image).enhance(2.0)
+        image = ImageEnhance.Sharpness(image).enhance(2.0)
+
         # 改用 pytesseract 辨識
-        raw_text = reader.image_to_string(image, lang='chi_tra+eng')
+        # 加入 --psm 4 參數：告訴 AI 這是「單欄但大小不一」的文字（適合發票與明細）
+        custom_config = r'--oem 3 --psm 4'
+        raw_text = reader.image_to_string(image, lang='chi_tra+eng', config=custom_config)
         results = [line.strip() for line in raw_text.split('\n') if line.strip()]
     except Exception as e:
         st.error(f"影像辨識處理發生異常: {str(e)}")
