@@ -4,6 +4,7 @@ from datetime import datetime
 from PIL import Image, ImageEnhance, ImageOps
 
 import numpy as np
+import cv2
 import re
 import os
 
@@ -172,27 +173,26 @@ def process_receipt(image):
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
-        # 2. 影像預處理：打造「極致掃描機」效果
-        # (A) 智能放大：將短邊至少放大到 1500 像素，確保所有細小字體都能被看清
-        width, height = image.size
-        min_edge = min(width, height)
-        if min_edge < 1500:
-            ratio = 1500 / min_edge
-            # 使用高質量的縮放演算法 (若 Pillow 版本較舊，容錯處理)
-            resample_filter = getattr(Image, 'Resampling', Image).LANCZOS if hasattr(Image, 'Resampling') else Image.LANCZOS
-            image = image.resize((int(width * ratio), int(height * ratio)), resample_filter)
-            
-        image.thumbnail((2500, 2500)) # 限制最大尺寸避免雲端記憶體爆掉
+        # 2. 影像預處理：升級為 OpenCV「自適應二值化」(專治陰影與光源不均)
+        img_array = np.array(image)
         
-        # (B) 溫和的影像處理：過度的對比和銳化會破壞「中文字」的筆畫，導致 Tesseract 變成瞎子
-        image = ImageOps.grayscale(image)
-        image = ImageEnhance.Contrast(image).enhance(1.5)   # 只需要稍微加深字體即可
-        # 移除暴力的銳化與自動曝光，保留原始字體的完整輪廓
+        # 轉為灰階
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        
+        # 放大圖片以利辨識細小文字
+        h, w = gray.shape
+        if min(h, w) < 1500:
+            ratio = 1500 / min(h, w)
+            gray = cv2.resize(gray, None, fx=ratio, fy=ratio, interpolation=cv2.INTER_CUBIC)
+            
+        # 核心技術：自適應二值化 (Adaptive Thresholding)
+        # 會把圖片切成小區塊計算光線，完美去除陰影，把背景變全白、文字變全黑！
+        processed_image = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15)
 
         # 改用 pytesseract 辨識
         # 加入 --psm 4 參數：告訴 AI 這是「單欄但大小不一」的文字（適合發票與明細）
         custom_config = r'--oem 3 --psm 4'
-        raw_text = reader.image_to_string(image, lang='chi_tra+eng', config=custom_config)
+        raw_text = reader.image_to_string(processed_image, lang='chi_tra+eng', config=custom_config)
         results = [line.strip() for line in raw_text.split('\n') if line.strip()]
     except Exception as e:
         st.error(f"影像辨識處理發生異常: {str(e)}")
