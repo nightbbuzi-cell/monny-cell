@@ -170,9 +170,8 @@ def process_receipt(image):
         if image.mode != 'RGB':
             image = image.convert('RGB')
             
-        # 2. 壓縮圖片尺寸：限制最大長寬為 1024 像素，並保持原始比例
-        # (這會把記憶體與 CPU 的消耗量降低 70%~90%，且對發票文字辨識率影響極小)
-        image.thumbnail((1024, 1024))
+        # 2. 壓縮圖片尺寸：稍微提升到 1600，讓小字體(收據品項)有足夠解析度被看清
+        image.thumbnail((1600, 1600))
         
         img_array = np.array(image)
         results = reader.readtext(img_array, detail=0)
@@ -181,25 +180,49 @@ def process_receipt(image):
         return [], 0.0
 
     items, total = [], 0.0
+    
+    # 排除非品項的常見發票表頭/表尾關鍵字
+    ignore_words = ["發票", "現金", "總計", "合計", "找零", "付款", "應收", "營業", "地址", "電話", "統編", "機台", "收銀", "明細", "折讓", "金額"]
+    
     for i in range(len(results)):
         line = results[i].strip()
-        if "#" in line:
-            try:
-                name = results[i+1] if len(line) <= 4 else line.split("#")[-1]
-                name = "".join(re.findall(r'[\u4e00-\u9fa5]+', name))
-                price = 0.0
-                for nl in results[i+1 : i+4]:
-                    nums = re.findall(r'\d+', nl)
-                    if nums:
-                        pv = nums[0]
-                        price = float(pv[:2] if len(pv) >= 3 and int(pv) > 100 else pv)
+        
+        # --- 1. 找總金額 ---
+        if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付"]):
+            nums = re.findall(r'\d+', "".join(results[i:i+3]).replace(',', ''))
+            if nums:
+                for n in reversed(nums):
+                    if float(n) > 0:
+                        total = float(n)
                         break
-                if name: items.append({"name": name, "price": price})
-            except Exception: continue
-    for i, line in enumerate(results):
-        if any(k in line for k in ["發票金額", "付現", "總計", "現金"]):
-            nums = re.findall(r'\d+', "".join(results[i:i+2]))
-            if nums: total = float(nums[0]); break
+            continue
+            
+        # --- 2. 找細項 (放寬標準) ---
+        # 條件：包含至少兩個中文字，且不是常見的發票表頭/表尾關鍵字
+        has_chinese = bool(re.search(r'[\u4e00-\u9fa5]{2,}', line))
+        is_ignored = any(k in line for k in ignore_words)
+        
+        if has_chinese and not is_ignored:
+            name = "".join(re.findall(r'[\u4e00-\u9fa5]+', line))
+            price = 0.0
+            
+            # 往後看 1~3 行尋找對應的金額
+            for nl in results[i+1 : i+4]:
+                nums = re.findall(r'\d+', nl.replace(',', ''))
+                if nums:
+                    try:
+                        p_val = float(nums[0])
+                        # 防呆：發票細項通常不會超過 50000，避免抓到統編或發票號碼
+                        if 0 < p_val < 50000:
+                            price = p_val
+                            break
+                    except Exception:
+                        continue
+            
+            if name and price > 0:
+                if not any(item['name'] == name and item['price'] == price for item in items):
+                    items.append({"name": name, "price": price})
+                    
     return items, total
 
 # --- UI 介面 ---
