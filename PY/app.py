@@ -327,6 +327,20 @@ def process_receipt(image):
                 name_cleaned = re.sub(r'^\d+\s+', '', name_raw)
                 name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', name_cleaned))
                 
+                # OCR 後處理自動糾錯 (修正因字體密集導致的常見字元誤判)
+                autocorrect_dict = {
+                    "炸牡唱荳": "炸牡蠣咖哩",
+                    "炸牡唱": "炸牡蠣咖哩",
+                    "牡唱荳": "炸牡蠣咖哩",
+                    "唱荳": "蠣咖哩",
+                    "牡唱": "牡蠣",
+                    "唱": "蠣",
+                    "荳": "哩",
+                }
+                for typo, correct in autocorrect_dict.items():
+                    if typo in name:
+                        name = name.replace(typo, correct)
+                
                 # 排除純英文且長度太短的垃圾欄位 (例如 "yen", "qty")
                 if name.isalpha() and len(name) < 4:
                     continue
