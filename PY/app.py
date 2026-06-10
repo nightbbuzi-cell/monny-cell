@@ -340,12 +340,12 @@ def process_receipt(image):
             return parsed_items, grand_total
 
         # 第一階段：使用自適應二值化影像辨識
-        raw_text_bin = reader.image_to_string(processed_image, lang='chi_tra+eng', config=custom_config)
+        raw_text_bin = reader.image_to_string(processed_image, lang='chi_tra', config=custom_config)
         results_bin = [line.strip() for line in raw_text_bin.split('\n') if line.strip()]
         items_bin, total_bin = parse_results(results_bin)
         
         # 第二階段：直接使用原始灰階影像辨識
-        raw_text_gray = reader.image_to_string(gray, lang='chi_tra+eng', config=custom_config)
+        raw_text_gray = reader.image_to_string(gray, lang='chi_tra', config=custom_config)
         results_gray = [line.strip() for line in raw_text_gray.split('\n') if line.strip()]
         items_gray, total_gray = parse_results(results_gray)
         
@@ -363,9 +363,9 @@ def process_receipt(image):
         
         # 組合偵錯顯示文字
         st.session_state['raw_ocr_text'] = (
-            "【自適應二值化影像 OCR 結果】:\n" + raw_text_bin + 
+            "【自適應二值化影像 OCR 結果 (chi_tra)】:\n" + raw_text_bin + 
             "\n\n================================\n\n" + 
-            "【原始灰階影像 OCR 結果】:\n" + raw_text_gray
+            "【原始灰階影像 OCR 結果 (chi_tra)】:\n" + raw_text_gray
         )
         
         # 寫入偵錯檔案以便 AI 讀取
