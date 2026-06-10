@@ -200,16 +200,18 @@ def process_receipt(image):
 
     items, total = [], 0.0
     
-    # 排除非品項的常見發票表頭/表尾關鍵字
+    # 嚴格排除非消費品項與統計、付款、時間、公司名稱等字眼
     exclude_keywords = [
-        "發票", "現金", "總計", "合計", "找零", "付款", "應收", "營業", "地址", "電話", 
-        "統編", "機台", "收銀", "明細", "折讓", "金額", "歡迎", "光臨", "謝謝", "惠顧", 
-        "會員", "點數", "折扣", "優惠", "交易", "卡號", "餘額", "單號", "桌號", "內用", 
-        "外帶", "日期", "時間", "退換", "憑證", "統ㄧ", "編號", "號碼", "店號", "門市", 
-        "店名", "稅", "刷卡", "載具", "星巴克", "超商", "收業", "結帳", "加點",
-        "小計", "付現", "機號", "客單", "人數", "line pay", "linepay", "pay", "支付", 
-        "銷售", "總額", "單價", "數量", "找退", "應付", "apple pay", "google pay", "台灣pay",
-        "visa", "master", "jcb", "悠遊卡", "一卡通", "icash", "電子"
+        # 1. 公司與商號名稱
+        "股份有限公司", "有限公司", "公司", "分公司", "股份", "物語", "墨凡", "須磨", "商店", "門市", "店名", "分店",
+        # 2. 日期、時間、序號、機號、人員
+        "交易序號", "交易號", "序號", "列印時間", "列印", "時間", "日期", "單號", "發票", "機號", "機台", "收銀", "櫃檯", "人員", "編號", "號碼", "客單", "桌號", "內用", "外帶",
+        # 3. 統計與金額總計
+        "人數", "總數量", "小計", "銷售總額", "總計", "合計", "營業額", "金額", "明細", "折讓", "稅", "單價", "數量", "小計:", "合計:",
+        # 4. 付款與載具資訊
+        "line pay", "linepay", "pay", "支付", "付現", "付款", "現金", "找零", "找退", "應收", "應付", "apple pay", "google pay", "台灣pay", "載具", "載具號碼", "卡號", "餘額", "visa", "master", "jcb", "悠遊卡", "一卡通", "icash", "電子", "信用卡", "刷卡",
+        # 5. 其他常見歡迎與提示詞
+        "歡迎", "光臨", "謝謝", "惠顧", "會員", "點數", "折扣", "優惠", "交易", "憑證", "退換"
     ]
     
     for i, line in enumerate(results):
@@ -217,7 +219,8 @@ def process_receipt(image):
         if not line: continue
         
         # --- 1. 辨識總計金額 ---
-        if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付", "總額"]):
+        # 包含常見的總計字眼
+        if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付", "總額", "銷售總額", "小計"]):
             # 結合下一行尋找數字 (有時金額會換行)
             combined_text = line + " " + (results[i+1] if i+1 < len(results) else "")
             # 修復 Tesseract 常見數字誤判：英文 O、多餘空白、金錢符號
@@ -231,57 +234,128 @@ def process_receipt(image):
             continue
             
         # --- 2. 辨識一般品項 ---
-        # 放寬中文字數限制，避免漏抓單字品項 (如: 水、袋)
-        has_chinese = bool(re.search(r'[\u4e00-\u9fa5]', line))
         # 轉換為小寫比對，嚴格排除非消費品項
         is_ignored = any(k in line.lower() for k in exclude_keywords)
+        if is_ignored:
+            continue
+            
+        # 額外以正則表達式排除日期、時間、電話等格式
+        if re.search(r'\d{4}[-/]\d{2}[-/]\d{2}', line): # 日期
+            continue
+        if re.search(r'\d{2}:\d{2}:\d{2}', line): # 時間
+            continue
+        if re.search(r'\b\d{2,4}-\d{6,8}\b', line): # 電話號碼 (例如: 07-1234567)
+            continue
+            
+        # 確保該行包含中文字元或英文字母 (品項名稱不可純為數字)
+        if not re.search(r'[\u4e00-\u9fa5a-zA-Z]', line):
+            continue
+            
+        # 轉換數字格式：移除逗號與金錢符號以利對齊比對
+        clean_line = line.replace(',', '').replace('$', '').replace('￥', '')
         
-        if has_chinese and not is_ignored:
-            # 轉換數字格式：移除逗號與金錢符號以利對齊比對
-            clean_line = line.replace(',', '').replace('$', '')
-            price = 0.0
-            qty = 1
-            name_raw = clean_line
+        # 分割 token 來精確尋找品項名稱與數量、金額 (支援: "品項 數量 金額"、"品項 單價 數量 金額"、"品項 金額")
+        tokens = clean_line.split()
+        if not tokens:
+            continue
             
-            # 嘗試精準匹配明細表「品項名稱」與行尾的「數量」與「金額」(容許 OCR 常見將 0 誤判為 O/o)
-            match_two = re.search(r'^(.*?)\s+([0-9Oo]+)\s+([0-9Oo]+(?:\.[0-9Oo]+)?)\s*$', clean_line)
-            # 若無數量，嘗試匹配行尾的「金額」
-            match_one = re.search(r'^(.*?)(?:\s+)?\b([0-9Oo]+(?:\.[0-9Oo]+)?)\s*$', clean_line)
+        # 從右向左掃描，最多提取 3 個數值 (可能是金額、數量、單價)
+        idx = len(tokens) - 1
+        extracted_nums = []
+        while idx >= 0 and len(extracted_nums) < 3:
+            token = tokens[idx]
+            # 去除括號或常見單位字眼
+            t_clean = token.replace('(', '').replace(')', '').replace('（', '').replace('）', '')
+            if t_clean.endswith('元'):
+                t_clean = t_clean[:-1]
+            t_digits = t_clean.replace('O', '0').replace('o', '0')
             
-            if match_two:
-                name_raw = match_two.group(1)
-                possible_qty = float(match_two.group(2).replace('O', '0').replace('o', '0'))
-                if possible_qty.is_integer() and 0 < possible_qty < 100:
-                    qty = int(possible_qty)
-                    price = float(match_two.group(3).replace('O', '0').replace('o', '0'))
-                else:
-                    name_raw = match_two.group(1) + " " + match_two.group(2)
-                    price = float(match_two.group(3).replace('O', '0').replace('o', '0'))
-            elif match_one:
-                name_raw = match_one.group(1)
-                price = float(match_one.group(2).replace('O', '0').replace('o', '0'))
+            # 若為純符號，視為雜訊跳過
+            if t_digits in ['*', '#', '-', '_', '/', '\\', ':', ';', '.', '!', '@', '%', '&']:
+                idx -= 1
+                continue
+                
+            if re.match(r'^\d+(?:\.\d+)?$', t_digits):
+                try:
+                    val = float(t_digits)
+                    extracted_nums.append((idx, val))
+                except ValueError:
+                    break
+                idx -= 1
             else:
-                # 若同一行找不到數字，往後找一兩行
-                for nl in results[i+1 : i+3]:
-                    nl_clean = nl.replace(',', '').replace('$', '')
-                    nums = re.findall(r'\b[0-9Oo]+(?:\.[0-9Oo]+)?\b', nl_clean)
-                    if nums:
-                        try:
-                            price = float(nums[-1].replace('O', '0').replace('o', '0'))
-                            break
-                        except Exception:
-                            pass
-                            
-            # 清洗品項名稱：僅保留中英數字
-            name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', name_raw))
-            # 將提取到的數量標示於品名後方，完美對齊介面
-            if qty > 1:
-                name = f"{name} x{qty}"
+                # 遇到非數字時：
+                # 如果尚未找到任何數字，且此 token 不含英文字母或中文，可視為 OCR 尾部雜訊並跳過
+                if len(extracted_nums) == 0:
+                    if not re.search(r'[\u4e00-\u9fa5a-zA-Z]', token):
+                        idx -= 1
+                        continue
+                    else:
+                        break
+                else:
+                    # 已經找到數字，現在碰到品項文字，停止搜尋數字
+                    break
+                    
+        extracted_nums.reverse() # 轉回從左到右的順序
+        
+        price = 0.0
+        qty = 1
+        name_raw = clean_line
+        
+        # 根據提取出的數字個數來判斷金額與數量
+        if len(extracted_nums) == 3:
+            # 格式：品項 單價 數量 總價 或 品項 數量 單價 總價
+            # 最後一個必定是總金額 (該品項對應的最終金額)
+            price = extracted_nums[2][1]
+            val1, val2 = extracted_nums[0][1], extracted_nums[1][1]
+            # 判斷哪一個是數量 (通常是整數且較小，或是兩者乘積等於總價)
+            if abs(val1 * val2 - price) < 1.0:
+                if val1.is_integer() and val1 < 100:
+                    qty = int(val1)
+                elif val2.is_integer() and val2 < 100:
+                    qty = int(val2)
+                else:
+                    qty = int(min(val1, val2))
+            else:
+                if val1.is_integer() and 0 < val1 < 100:
+                    qty = int(val1)
+                elif val2.is_integer() and 0 < val2 < 100:
+                    qty = int(val2)
+                else:
+                    qty = 1
+            cut_idx = extracted_nums[0][0]
+            name_raw = " ".join(tokens[:cut_idx])
             
-            if name and price > 0:
-                # 避免將重複的品項（同名同金額）重複加入
-                if not any(item['name'] == name and item['price'] == price for item in items):
-                    items.append({"name": name, "price": price})
+        elif len(extracted_nums) == 2:
+            # 格式：品項 數量 總價
+            price = extracted_nums[1][1]
+            val1 = extracted_nums[0][1]
+            if val1.is_integer() and 0 < val1 < 100:
+                qty = int(val1)
+            else:
+                qty = 1
+            cut_idx = extracted_nums[0][0]
+            name_raw = " ".join(tokens[:cut_idx])
+            
+        elif len(extracted_nums) == 1:
+            # 格式：品項 總價
+            price = extracted_nums[0][1]
+            qty = 1
+            cut_idx = extracted_nums[0][0]
+            name_raw = " ".join(tokens[:cut_idx])
+            
+        # 清除品項名稱前的序號 (例如: "1 炸牡蠣咖哩" -> "炸牡蠣咖哩")
+        name_cleaned = re.sub(r'^\d+\s+', '', name_raw)
+        # 清洗品項名稱：僅保留中英數字
+        name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', name_cleaned))
+        
+        # 將提取到的數量標示於品名後方，方便對齊與確認
+        if qty > 1:
+            name = f"{name} x{qty}"
+        
+        if name and price > 0:
+            # 避免將重複的品項（同名同金額）重複加入
+            if not any(item['name'] == name and item['price'] == price for item in items):
+                items.append({"name": name, "price": price})
                     
     return items, total
 
@@ -356,7 +430,7 @@ with tab1:
                         st.session_state['pending_items'] = items
                         st.session_state['detected_total'] = total
                     else:
-                        st.error("系統無法載入 easyocr 套件，請確認是否安裝正確。")
+                        st.error("系統無法載入 pytesseract 套件，請確認是否安裝正確。")
 
     # 只要有待處理品項，或者剛剛執行過影像掃描（有產生 detected_total），就顯示緩衝區
     show_buffer = len(st.session_state['pending_items']) > 0 or ('detected_total' in st.session_state)
