@@ -367,6 +367,14 @@ def process_receipt(image):
             "\n\n================================\n\n" + 
             "【原始灰階影像 OCR 結果】:\n" + raw_text_gray
         )
+        
+        # 寫入偵錯檔案以便 AI 讀取
+        try:
+            debug_path = os.path.join(BASE_DIR, "ocr_debug.txt")
+            with open(debug_path, "w", encoding="utf-8") as f:
+                f.write(st.session_state['raw_ocr_text'])
+        except Exception:
+            pass
 
     except Exception as e:
         st.error(f"影像辨識處理發生異常: {str(e)}")
