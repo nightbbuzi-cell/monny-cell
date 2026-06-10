@@ -1,10 +1,10 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from PIL import Image
-import streamlit.components.v1 as components
+from PIL import Image, ImageEnhance, ImageOps
 
 import numpy as np
+import cv2
 import re
 import os
 
@@ -31,7 +31,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # --- 📱 注入手機版滑動切換分頁 (Swipe to switch tabs) 的 JavaScript ---
-components.html("""
+st.html("""
 <script>
 try {
     const parentWindow = window.parent;
@@ -79,7 +79,7 @@ try {
     console.warn("因跨網域或安全限制，滑動切換已停用");
 }
 </script>
-""", height=0, width=0)
+""")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.path.join(BASE_DIR, "group_expense_data.csv")
@@ -105,10 +105,12 @@ def save_members(members):
 @st.cache_resource
 def load_ocr_reader():
     try:
-        import easyocr
-        return easyocr.Reader(['ch_tra', 'en'])
+        import pytesseract
+        # 測試是否成功載入
+        pytesseract.get_tesseract_version()
+        return pytesseract
     except Exception as e:
-        st.error(f"OCR 模組載入失敗: {e}")
+        st.error(f"OCR 模組載入失敗 (請確認已安裝 tesseract 系統套件): {e}")
         return None
 
 # --- 資料讀取與自動修正 ---
@@ -166,65 +168,93 @@ def process_receipt(image):
     if reader is None:
         return [], 0.0
         
-    img_array = np.array(image)
-    results = reader.readtext(img_array, detail=0)
+    try:
+        # 1. 確保圖片為 RGB 格式，避免透明通道 (RGBA) 造成模型解析報錯
+        if image.mode != 'RGB':
+            image = image.convert('RGB')
+            
+        # 2. 影像預處理：升級為 OpenCV「自適應二值化」(專治陰影與光源不均)
+        img_array = np.array(image)
+        
+        # 轉為灰階
+        gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        
+        # 放大圖片以利辨識細小文字
+        h, w = gray.shape
+        if min(h, w) < 1500:
+            ratio = 1500 / min(h, w)
+            gray = cv2.resize(gray, None, fx=ratio, fy=ratio, interpolation=cv2.INTER_CUBIC)
+            
+        # 核心技術：自適應二值化 (Adaptive Thresholding)
+        # 會把圖片切成小區塊計算光線，完美去除陰影，把背景變全白、文字變全黑！
+        processed_image = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 15)
+
+        # 改用 pytesseract 辨識
+        # 加入 --psm 4 參數：告訴 AI 這是「單欄但大小不一」的文字（適合發票與明細）
+        custom_config = r'--oem 3 --psm 4'
+        raw_text = reader.image_to_string(processed_image, lang='chi_tra+eng', config=custom_config)
+        results = [line.strip() for line in raw_text.split('\n') if line.strip()]
+    except Exception as e:
+        st.error(f"影像辨識處理發生異常: {str(e)}")
+        return [], 0.0
+
     items, total = [], 0.0
     
-    # 常見的非品項關鍵字，用來過濾雜訊
-    exclude_keywords = ["發票", "明細", "統編", "時間", "日期", "店名", "門市", "地址", "電話", "營業", "找零", "現金", "刷卡", "信用卡", "總計", "合計", "小計", "付現", "交易", "機號", "客單"]
+    # 排除非品項的常見發票表頭/表尾關鍵字
+    exclude_keywords = [
+        "發票", "現金", "總計", "合計", "找零", "付款", "應收", "營業", "地址", "電話", 
+        "統編", "機台", "收銀", "明細", "折讓", "金額", "歡迎", "光臨", "謝謝", "惠顧", 
+        "會員", "點數", "折扣", "優惠", "交易", "卡號", "餘額", "單號", "桌號", "內用", 
+        "外帶", "日期", "時間", "退換", "憑證", "統ㄧ", "編號", "號碼", "店號", "門市", 
+        "店名", "稅", "刷卡", "載具", "星巴克", "超商", "收業", "結帳", "加點",
+        "小計", "付現", "機號", "客單"
+    ]
     
     for i, line in enumerate(results):
         line = line.strip()
         if not line: continue
         
-        # 1. 辨識總計金額
+        # --- 1. 辨識總計金額 ---
         if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付", "總額"]):
             # 結合下一行尋找數字 (有時金額會換行)
             combined_text = line + " " + (results[i+1] if i+1 < len(results) else "")
+            # 修復 Tesseract 常見數字誤判：英文 O、多餘空白、金錢符號
+            combined_text = combined_text.replace('O', '0').replace('o', '0').replace(' ', '').replace(',', '').replace('$', '')
             nums = re.findall(r'\d+', combined_text)
             if nums:
-                try:
-                    total = float(nums[-1])
-                except Exception:
-                    pass
+                for n in reversed(nums):
+                    if float(n) > 0:
+                        total = float(n)
+                        break
             continue
             
-        # 2. 辨識一般品項
-        # 若包含中文且不在排除關鍵字中，視為可能的品項
-        if re.search(r'[\u4e00-\u9fa5]', line) and not any(k in line for k in exclude_keywords):
-            # 濾除特殊符號保留中英數
+        # --- 2. 辨識一般品項 ---
+        has_chinese = bool(re.search(r'[\u4e00-\u9fa5]{2,}', line))
+        is_ignored = any(k in line for k in exclude_keywords)
+        
+        if has_chinese and not is_ignored:
             name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', line))
-            # 品項名稱通常不會太短 (至少大於等於2個字)
-            if len(name) < 2:
-                continue
-                
             price = 0.0
-            # 嘗試在同一行找數字作為金額
-            nums = re.findall(r'\d+', line)
-            if nums:
-                try:
-                    price = float(nums[-1])
-                except Exception:
-                    pass
             
-            # 若同一行沒找到數字，或找到的數字太小(可能是數量)，則看下一行
-            if price <= 10.0 and i + 1 < len(results):
-                next_line = results[i+1].strip()
-                # 如果下一行沒有太多中文字 (避免抓到下一個品項)，則從中提取數字
-                if not re.search(r'[\u4e00-\u9fa5]{2,}', next_line):
-                    next_nums = re.findall(r'\d+', next_line)
-                    if next_nums:
-                        try:
-                            # 避免抓到商品條碼等過長數字，做個簡單防呆
-                            possible_price = float(next_nums[-1])
-                            if possible_price < 100000:
-                                price = possible_price
-                        except Exception:
-                            pass
-                            
-            if name:
-                items.append({"name": name, "price": price})
+            # 嘗試在同一行或往後兩行找對應金額
+            for nl in results[i : i+3]:
+                nl_clean = nl.replace('O', '0').replace('o', '0').replace(' ', '').replace(',', '').replace('$', '')
+                nums = re.findall(r'\d+', nl_clean)
+                if nums:
+                    try:
+                        p_val = float(nums[-1] if nl == line else nums[0])
+                        # 防呆：發票細項通常不會超過 50000，且大於 0
+                        if 0 < p_val < 50000:
+                            price = p_val
+                            break
+                    except Exception:
+                        continue
             
+            if name and price > 0:
+                # 避免將重複的品項（同名同金額）重複加入
+                if not any(item['name'] == name and item['price'] == price for item in items):
+                    items.append({"name": name, "price": price})
+                    
     return items, total
 
 # --- UI 介面 ---
@@ -246,7 +276,7 @@ if not GROUP_MEMBERS:
         with col_m:
             first_member = st.text_input("輸入您的名稱", placeholder="例如：自己、小明...", label_visibility="collapsed")
         with col_btn:
-            if st.button(":material/person_add: 開始使用", type="primary", use_container_width=True):
+            if st.button(":material/person_add: 開始使用", type="primary", width="stretch"):
                 if first_member and first_member not in GROUP_MEMBERS:
                     GROUP_MEMBERS.append(first_member)
                     save_members(GROUP_MEMBERS)
@@ -279,7 +309,7 @@ with tab1:
             st.write("#### :material/edit_square: 手動輸入")
             with st.form("manual_add", clear_on_submit=True):
                 mn, mp = st.text_input("品項名稱"), st.number_input("金額", min_value=0.0)
-                submitted = st.form_submit_button("加入清單", use_container_width=True)
+                submitted = st.form_submit_button("加入清單", width="stretch")
                 
             # 將 st.rerun 移出 form 範圍，徹底解決崩潰問題
             if submitted and mn:
@@ -290,7 +320,7 @@ with tab1:
         with st.container(border=True):
             st.write("#### :material/add_a_photo: 掃描收據")
             uploaded_file = st.file_uploader("上傳收據", type=["jpg", "png"], label_visibility="collapsed")
-            if uploaded_file and st.button(":material/rocket_launch: 執行辨識", use_container_width=True):
+            if uploaded_file and st.button(":material/rocket_launch: 執行辨識", width="stretch"):
                 with st.spinner("載入模型與辨識中..."):
                     reader = load_ocr_reader()
                     if reader is not None:
@@ -357,7 +387,7 @@ with tab1:
 
         st.divider()
         c_btn1, c_btn2 = st.columns(2)
-        if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", use_container_width=True):
+        if c_btn1.button(":material/check_circle: 批次儲存至帳本", type="primary", width="stretch"):
             if confirmed_batch: # 防呆：確保清單有東西才存，避免空陣列合併崩潰
                 df_tmp = load_all_data()
                 new_df = pd.DataFrame(confirmed_batch)
@@ -373,7 +403,7 @@ with tab1:
             st.success("全部項目已入帳！")
             st.rerun()
             
-        if c_btn2.button(":material/cancel: 全部捨棄", use_container_width=True):
+        if c_btn2.button(":material/cancel: 全部捨棄", width="stretch"):
             st.session_state['pending_items'] = []
             if 'detected_total' in st.session_state:
                 del st.session_state['detected_total']
@@ -439,7 +469,7 @@ with tab2:
                 styler = styler.map(style_func, subset=['結算餘額'])
             else:
                 styler = styler.applymap(style_func, subset=['結算餘額'])
-            st.dataframe(styler, use_container_width=True, hide_index=True)
+            st.dataframe(styler, width="stretch", hide_index=True)
 
 with tab3:
     st.write("#### :material/history: 歷史明細編輯器")
@@ -447,7 +477,7 @@ with tab3:
     data = load_all_data()
     
     edited_df = st.data_editor(
-        data, num_rows="dynamic", use_container_width=True,
+        data, num_rows="dynamic", width="stretch",
         column_config={
             "金額": st.column_config.NumberColumn(format="$%.1f"),
             "誰付錢_代墊": st.column_config.SelectboxColumn(options=GROUP_MEMBERS),
@@ -475,7 +505,7 @@ with tab4:
         with st.container(border=True):
             st.write("**:material/person_add: 新增成員**")
             new_member = st.text_input("輸入新成員名稱", placeholder="輸入名稱...", label_visibility="collapsed")
-            if st.button("加入群組", use_container_width=True) and new_member:
+            if st.button("加入群組", width="stretch") and new_member:
                 if new_member not in GROUP_MEMBERS:
                     GROUP_MEMBERS.append(new_member)
                     save_members(GROUP_MEMBERS)
@@ -489,7 +519,7 @@ with tab4:
             st.write("**:material/person_remove: 移除成員**")
             if GROUP_MEMBERS:
                 member_to_remove = st.selectbox("選擇要移除的成員", GROUP_MEMBERS, label_visibility="collapsed")
-                if st.button("確認移除", type="primary", use_container_width=True):
+                if st.button("確認移除", type="primary", width="stretch"):
                     GROUP_MEMBERS.remove(member_to_remove)
                     save_members(GROUP_MEMBERS)
                     st.session_state['group_members'] = GROUP_MEMBERS
@@ -505,11 +535,11 @@ with tab4:
         
         c_db1, c_db2 = st.columns(2)
         with c_db1:
-            if st.button(":material/delete: 清空歷史紀錄", type="primary", use_container_width=True):
+            if st.button(":material/delete: 清空歷史紀錄", type="primary", width="stretch"):
                 save_full_df(pd.DataFrame(columns=["日期", "品項", "金額", "誰付錢_代墊", "誰消費_應付", "分帳模式", "記錄者"]))
                 st.rerun()
         with c_db2:
-            if st.button(":material/warning: 重置系統", type="primary", use_container_width=True, help="徹底清除成員與所有紀錄，返回初始畫面"):
+            if st.button(":material/warning: 重置系統", type="primary", width="stretch", help="徹底清除成員與所有紀錄，返回初始畫面"):
                 if os.path.exists(DATA_FILE): os.remove(DATA_FILE)
                 if os.path.exists(MEMBERS_FILE): os.remove(MEMBERS_FILE)
                 if 'group_members' in st.session_state: del st.session_state['group_members']
