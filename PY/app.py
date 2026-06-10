@@ -186,12 +186,10 @@ def process_receipt(image):
             gray = cv2.resize(gray, None, fx=ratio, fy=ratio, interpolation=cv2.INTER_CUBIC)
             
         # 核心技術：自適應二值化 (Adaptive Thresholding)
-        # 會把圖片切成小區塊計算光線，完美去除陰影，把背景變全白、文字變全黑！
         # 降低 C 值以保留淡色字元
         processed_image = cv2.adaptiveThreshold(gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 31, 10)
 
         # 改用 pytesseract 辨識
-        # 加入 --psm 4 參數：告訴 AI 這是「單欄但大小不一」的文字（適合發票與明細）
         custom_config = r'--oem 3 --psm 4'
 
         # 排除非品項的常見發票表頭/表尾關鍵字
@@ -201,7 +199,7 @@ def process_receipt(image):
             # 2. 日期、時間、序號、機號、人員
             "交易序號", "交易號", "序號", "列印時間", "列印", "時間", "日期", "單號", "發票", "機號", "機台", "收銀", "櫃檯", "人員", "編號", "號碼", "客單", "桌號", "內用", "外帶",
             # 3. 統計與金額總計
-            "人數", "總數量", "小計", "銷售總額", "總計", "合計", "營業額", "金額", "明細", "折讓", "稅", "單價", "數量", "小計:", "合計:", "銷售", "總額",
+            "人數", "總數量", "小計", "銷售總額", "總計", "合計", "營業額", "金額", "明細", "折讓", "稅", "單價", "數量", "小計:", "合計:", "銷售", "總額", "總數", "份數", "筆數", "件數", "共",
             # 4. 付款與載具資訊
             "line pay", "linepay", "pay", "支付", "付現", "付款", "現金", "找零", "找退", "應收", "應付", "apple pay", "google pay", "台灣pay", "載具", "載具號碼", "卡號", "餘額", "visa", "master", "jcb", "悠遊卡", "一卡通", "icash", "電子", "信用卡", "刷卡",
             # 5. 其他常見歡迎與提示詞
@@ -217,11 +215,8 @@ def process_receipt(image):
                 if not line: continue
                 
                 # --- 1. 辨識總計金額 ---
-                # 包含常見的總計字眼
                 if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付", "總額", "銷售總額", "小計"]):
-                    # 結合下一行尋找數字 (有時金額會換行)
                     combined_text = line + " " + (ocr_results[i+1] if i+1 < len(ocr_results) else "")
-                    # 修復 Tesseract 常見數字誤判：英文 O、多餘空白、金錢符號
                     combined_text = combined_text.replace('O', '0').replace('o', '0').replace(' ', '').replace(',', '').replace('$', '')
                     nums = re.findall(r'\d+', combined_text)
                     if nums:
@@ -232,13 +227,11 @@ def process_receipt(image):
                     continue
                     
                 # --- 2. 辨識一般品項 ---
-                # 轉換為小寫並去除空格比對，解決 Tesseract 自動在漢字間補空格的問題
                 line_no_spaces = line.replace(" ", "").lower()
                 is_ignored = any(k.replace(" ", "") in line_no_spaces for k in exclude_keywords)
                 if is_ignored:
                     continue
                     
-                # 額外以正則表達式排除日期、時間、電話等格式
                 if re.search(r'\d{4}[-/]\d{2}[-/]\d{2}', line): # 日期
                     continue
                 if re.search(r'\d{2}:\d{2}:\d{2}', line): # 時間
@@ -263,13 +256,11 @@ def process_receipt(image):
                 extracted_nums = []
                 while idx >= 0 and len(extracted_nums) < 3:
                     token = tokens[idx]
-                    # 去除括號或常見單位字眼
                     t_clean = token.replace('(', '').replace(')', '').replace('（', '').replace('）', '')
                     if t_clean.endswith('元'):
                         t_clean = t_clean[:-1]
                     t_digits = t_clean.replace('O', '0').replace('o', '0')
                     
-                    # 若為純符號，視為雜訊跳過
                     if t_digits in ['*', '#', '-', '_', '/', '\\', ':', ';', '.', '!', '@', '%', '&']:
                         idx -= 1
                         continue
@@ -282,8 +273,6 @@ def process_receipt(image):
                             break
                         idx -= 1
                     else:
-                        # 遇到非數字時：
-                        # 如果尚未找到任何數字，且此 token 不含英文字母或中文，可視為 OCR 尾部雜訊並跳過
                         if len(extracted_nums) == 0:
                             if not re.search(r'[\u4e00-\u9fa5a-zA-Z]', token):
                                 idx -= 1
@@ -291,18 +280,15 @@ def process_receipt(image):
                             else:
                                 break
                         else:
-                            # 已經找到數字，現在碰到品項文字，停止搜尋數字
                             break
                             
-                extracted_nums.reverse() # 轉回從左到右的順序
+                extracted_nums.reverse()
                 
                 price = 0.0
                 qty = 1
                 name_raw = clean_line
                 
-                # 根據提取出的數字個數來判斷金額與數量
                 if len(extracted_nums) == 3:
-                    # 格式：品項 單價 數量 總價 或 品項 數量 單價 總價
                     price = extracted_nums[2][1]
                     val1, val2 = extracted_nums[0][1], extracted_nums[1][1]
                     if abs(val1 * val2 - price) < 1.0:
@@ -323,7 +309,6 @@ def process_receipt(image):
                     name_raw = " ".join(tokens[:cut_idx])
                     
                 elif len(extracted_nums) == 2:
-                    # 格式：品項 數量 總價
                     price = extracted_nums[1][1]
                     val1 = extracted_nums[0][1]
                     if val1.is_integer() and 0 < val1 < 100:
@@ -334,45 +319,60 @@ def process_receipt(image):
                     name_raw = " ".join(tokens[:cut_idx])
                     
                 elif len(extracted_nums) == 1:
-                    # 格式：品項 總價
                     price = extracted_nums[0][1]
                     qty = 1
                     cut_idx = extracted_nums[0][0]
                     name_raw = " ".join(tokens[:cut_idx])
                     
-                # 清除品項名稱前的序號 (例如: "1 炸牡蠣咖哩" -> "炸牡蠣咖哩")
                 name_cleaned = re.sub(r'^\d+\s+', '', name_raw)
-                # 清洗品項名稱：僅保留中英數字
                 name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', name_cleaned))
                 
-                # 將提取到的數量標示於品名後方，方便對齊與確認
+                # 排除純英文且長度太短的垃圾欄位 (例如 "yen", "qty")
+                if name.isalpha() and len(name) < 4:
+                    continue
+                
                 if qty > 1:
                     name = f"{name} x{qty}"
                 
                 if name and price > 0:
-                    # 避免將重複的品項（同名同金額）重複加入
                     if not any(item['name'] == name and item['price'] == price for item in parsed_items):
                         parsed_items.append({"name": name, "price": price})
             return parsed_items, grand_total
 
-        # 第一階段：使用自適應二值化後的影像辨識
-        raw_text = reader.image_to_string(processed_image, lang='chi_tra+eng', config=custom_config)
-        results = [line.strip() for line in raw_text.split('\n') if line.strip()]
-        items, total = parse_results(results)
-        st.session_state['raw_ocr_text'] = raw_text
+        # 第一階段：使用自適應二值化影像辨識
+        raw_text_bin = reader.image_to_string(processed_image, lang='chi_tra+eng', config=custom_config)
+        results_bin = [line.strip() for line in raw_text_bin.split('\n') if line.strip()]
+        items_bin, total_bin = parse_results(results_bin)
         
-        # 降級/備用機制：若二值化沒有辨識出任何品項，改直接用原始灰階影像再辨識一次
-        if not items:
-            raw_text_gray = reader.image_to_string(gray, lang='chi_tra+eng', config=custom_config)
-            results_gray = [line.strip() for line in raw_text_gray.split('\n') if line.strip()]
-            items, total = parse_results(results_gray)
-            st.session_state['raw_ocr_text'] = raw_text_gray
+        # 第二階段：直接使用原始灰階影像辨識
+        raw_text_gray = reader.image_to_string(gray, lang='chi_tra+eng', config=custom_config)
+        results_gray = [line.strip() for line in raw_text_gray.split('\n') if line.strip()]
+        items_gray, total_gray = parse_results(results_gray)
+        
+        # 合併兩階段辨識出來的所有品項（去重）
+        combined_items = []
+        seen = set()
+        for item in items_bin + items_gray:
+            key = (item['name'], item['price'])
+            if key not in seen:
+                seen.add(key)
+                combined_items.append(item)
+                
+        # 決定總計金額與儲存偵錯文字
+        total = max(total_bin, total_gray)
+        
+        # 組合偵錯顯示文字
+        st.session_state['raw_ocr_text'] = (
+            "【自適應二值化影像 OCR 結果】:\n" + raw_text_bin + 
+            "\n\n================================\n\n" + 
+            "【原始灰階影像 OCR 結果】:\n" + raw_text_gray
+        )
 
     except Exception as e:
         st.error(f"影像辨識處理發生異常: {str(e)}")
         return [], 0.0
         
-    return items, total
+    return combined_items, total
 
 # --- UI 介面 ---
 if 'group_members' not in st.session_state:
