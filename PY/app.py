@@ -170,26 +170,60 @@ def process_receipt(image):
     results = reader.readtext(img_array, detail=0)
     items, total = [], 0.0
     
+    # 常見的非品項關鍵字，用來過濾雜訊
+    exclude_keywords = ["發票", "明細", "統編", "時間", "日期", "店名", "門市", "地址", "電話", "營業", "找零", "現金", "刷卡", "信用卡", "總計", "合計", "小計", "付現", "交易", "機號", "客單"]
+    
     for i, line in enumerate(results):
         line = line.strip()
-        if "#" in line:
-            try:
-                # 防呆：確保 i+1 不會超出陣列索引範圍
-                name = results[i+1] if (len(line) <= 4 and i + 1 < len(results)) else line.split("#")[-1]
-                name = "".join(re.findall(r'[\u4e00-\u9fa5]+', name))
-                price = 0.0
-                for nl in results[i+1 : i+4]:
-                    nums = re.findall(r'\d+', nl)
-                    if nums:
-                        pv = nums[0]
-                        price = float(pv[:2] if len(pv) >= 3 and int(pv) > 100 else pv)
-                        break
-                if name: items.append({"name": name, "price": price})
-            except Exception: continue
+        if not line: continue
+        
+        # 1. 辨識總計金額
+        if any(k in line for k in ["發票金額", "付現", "總計", "現金", "合計", "應付", "總額"]):
+            # 結合下一行尋找數字 (有時金額會換行)
+            combined_text = line + " " + (results[i+1] if i+1 < len(results) else "")
+            nums = re.findall(r'\d+', combined_text)
+            if nums:
+                try:
+                    total = float(nums[-1])
+                except Exception:
+                    pass
+            continue
             
-        if any(k in line for k in ["發票金額", "付現", "總計", "現金"]):
-            nums = re.findall(r'\d+', "".join(results[i:i+2]))
-            if nums: total = float(nums[0])
+        # 2. 辨識一般品項
+        # 若包含中文且不在排除關鍵字中，視為可能的品項
+        if re.search(r'[\u4e00-\u9fa5]', line) and not any(k in line for k in exclude_keywords):
+            # 濾除特殊符號保留中英數
+            name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', line))
+            # 品項名稱通常不會太短 (至少大於等於2個字)
+            if len(name) < 2:
+                continue
+                
+            price = 0.0
+            # 嘗試在同一行找數字作為金額
+            nums = re.findall(r'\d+', line)
+            if nums:
+                try:
+                    price = float(nums[-1])
+                except Exception:
+                    pass
+            
+            # 若同一行沒找到數字，或找到的數字太小(可能是數量)，則看下一行
+            if price <= 10.0 and i + 1 < len(results):
+                next_line = results[i+1].strip()
+                # 如果下一行沒有太多中文字 (避免抓到下一個品項)，則從中提取數字
+                if not re.search(r'[\u4e00-\u9fa5]{2,}', next_line):
+                    next_nums = re.findall(r'\d+', next_line)
+                    if next_nums:
+                        try:
+                            # 避免抓到商品條碼等過長數字，做個簡單防呆
+                            possible_price = float(next_nums[-1])
+                            if possible_price < 100000:
+                                price = possible_price
+                        except Exception:
+                            pass
+                            
+            if name:
+                items.append({"name": name, "price": price})
             
     return items, total
 
