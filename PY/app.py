@@ -207,7 +207,9 @@ def process_receipt(image):
         "會員", "點數", "折扣", "優惠", "交易", "卡號", "餘額", "單號", "桌號", "內用", 
         "外帶", "日期", "時間", "退換", "憑證", "統ㄧ", "編號", "號碼", "店號", "門市", 
         "店名", "稅", "刷卡", "載具", "星巴克", "超商", "收業", "結帳", "加點",
-        "小計", "付現", "機號", "客單"
+        "小計", "付現", "機號", "客單", "人數", "line pay", "linepay", "pay", "支付", 
+        "銷售", "總額", "單價", "數量", "找退", "應付", "apple pay", "google pay", "台灣pay",
+        "visa", "master", "jcb", "悠遊卡", "一卡通", "icash", "電子"
     ]
     
     for i, line in enumerate(results):
@@ -229,26 +231,52 @@ def process_receipt(image):
             continue
             
         # --- 2. 辨識一般品項 ---
-        has_chinese = bool(re.search(r'[\u4e00-\u9fa5]{2,}', line))
-        is_ignored = any(k in line for k in exclude_keywords)
+        # 放寬中文字數限制，避免漏抓單字品項 (如: 水、袋)
+        has_chinese = bool(re.search(r'[\u4e00-\u9fa5]', line))
+        # 轉換為小寫比對，嚴格排除非消費品項
+        is_ignored = any(k in line.lower() for k in exclude_keywords)
         
         if has_chinese and not is_ignored:
-            name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', line))
+            # 轉換數字格式：移除逗號與金錢符號以利對齊比對
+            clean_line = line.replace(',', '').replace('$', '')
             price = 0.0
+            qty = 1
+            name_raw = clean_line
             
-            # 嘗試在同一行或往後兩行找對應金額
-            for nl in results[i : i+3]:
-                nl_clean = nl.replace('O', '0').replace('o', '0').replace(' ', '').replace(',', '').replace('$', '')
-                nums = re.findall(r'\d+', nl_clean)
-                if nums:
-                    try:
-                        p_val = float(nums[-1] if nl == line else nums[0])
-                        # 防呆：發票細項通常不會超過 50000，且大於 0
-                        if 0 < p_val < 50000:
-                            price = p_val
+            # 嘗試精準匹配明細表「品項名稱」與行尾的「數量」與「金額」(容許 OCR 常見將 0 誤判為 O/o)
+            match_two = re.search(r'^(.*?)\s+([0-9Oo]+)\s+([0-9Oo]+(?:\.[0-9Oo]+)?)\s*$', clean_line)
+            # 若無數量，嘗試匹配行尾的「金額」
+            match_one = re.search(r'^(.*?)(?:\s+)?\b([0-9Oo]+(?:\.[0-9Oo]+)?)\s*$', clean_line)
+            
+            if match_two:
+                name_raw = match_two.group(1)
+                possible_qty = float(match_two.group(2).replace('O', '0').replace('o', '0'))
+                if possible_qty.is_integer() and 0 < possible_qty < 100:
+                    qty = int(possible_qty)
+                    price = float(match_two.group(3).replace('O', '0').replace('o', '0'))
+                else:
+                    name_raw = match_two.group(1) + " " + match_two.group(2)
+                    price = float(match_two.group(3).replace('O', '0').replace('o', '0'))
+            elif match_one:
+                name_raw = match_one.group(1)
+                price = float(match_one.group(2).replace('O', '0').replace('o', '0'))
+            else:
+                # 若同一行找不到數字，往後找一兩行
+                for nl in results[i+1 : i+3]:
+                    nl_clean = nl.replace(',', '').replace('$', '')
+                    nums = re.findall(r'\b[0-9Oo]+(?:\.[0-9Oo]+)?\b', nl_clean)
+                    if nums:
+                        try:
+                            price = float(nums[-1].replace('O', '0').replace('o', '0'))
                             break
-                    except Exception:
-                        continue
+                        except Exception:
+                            pass
+                            
+            # 清洗品項名稱：僅保留中英數字
+            name = "".join(re.findall(r'[\u4e00-\u9fa5a-zA-Z0-9]+', name_raw))
+            # 將提取到的數量標示於品名後方，完美對齊介面
+            if qty > 1:
+                name = f"{name} x{qty}"
             
             if name and price > 0:
                 # 避免將重複的品項（同名同金額）重複加入
